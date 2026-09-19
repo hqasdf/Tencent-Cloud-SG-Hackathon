@@ -1,0 +1,15 @@
+import type { CaseAnalysis } from "../types/dispute";
+import { labelize, money } from "../utils/format";
+
+function Metric({ label, value }: { label: string; value: string | number | boolean | undefined }) {
+  return <div className="metric"><span>{label}</span><b>{typeof value === "boolean" ? (value ? "Yes" : "No") : value ?? "—"}</b></div>;
+}
+
+export function DeterministicAnalysisPanel({ value }: { value: CaseAnalysis }) {
+  const facts = value.analysis;
+  const isRoute = value.disputeType === "route_deviation";
+  const fields = isRoute
+    ? [["Expected route", `${facts.expectedRouteDistanceKm} km`], ["Actual route", `${facts.actualRouteDistanceKm} km`], ["Distance difference", `${facts.distanceDifferenceKm} km`], ["Deviation", `${facts.deviationPercentage}%`], ["Explained", `${facts.explainedDeviationDistanceKm} km`], ["Unexplained", `${facts.unexplainedDeviationDistanceKm} km`], ["Fare difference", money(Number(facts.fareDifference), value.resolutionRecommendation.currency)]]
+    : [["Pickup distance", `${facts.driverDistanceToPickupMeters} m`], ["Inside radius", facts.driverWithinPickupRadius], ["Wait time", `${facts.waitingDurationSeconds} sec`], ["Arrival", facts.driverArrivalTimestamp], ["Cancellation", facts.cancellationTimestamp], ["Charge", money(Number(facts.cancellationChargeAmount), value.resolutionRecommendation.currency)]];
+  return <section className="panel deterministic"><div className="panel-heading"><div><span className="eyebrow">Deterministic analysis</span><h3>Calculated facts & policy rules</h3></div><span className={`resolution-mode ${value.resolutionMode.toLowerCase()}`}>{value.resolutionMode}</span></div><div className="metrics-grid">{fields.map(([label, metric]) => <Metric key={String(label)} label={String(label)} value={metric as string | number | boolean} />)}</div><div className="analysis-columns"><div><span className="eyebrow">PolicyTwin · {value.policyEvaluation.policyId}</span><div className="rules">{value.policyEvaluation.evaluatedRules.map((rule) => <article key={rule.ruleId} className={rule.passed ? "rule-pass" : "rule-fail"}><b>{rule.passed ? "Pass" : "Fail"}</b><div><strong>{labelize(rule.ruleId)}</strong><p>{rule.description}</p><small>Actual: {String(rule.actualValue)} · required: {String(rule.requiredValue)} · {rule.evidenceIds.join(", ")}</small></div></article>)}</div></div><div><span className="eyebrow">Calculated recommendation</span><h3>{value.resolutionRecommendation.recommendedAction}</h3><p>{value.resolutionRecommendation.explanation}</p><div className="analysis-refund"><span>Calculated refund</span><b>{money(value.resolutionRecommendation.refundAmount, value.resolutionRecommendation.currency)}</b></div><div className="analysis-refund"><span>Operational confidence</span><b>{Math.round(value.confidence.overallConfidence * 100)}%</b></div>{value.escalationReasons.length > 0 && <p className="review-reason">Escalation: {value.escalationReasons.join(", ")}</p>}<small className="prototype-note">{value.confidence.prototypeNotice}</small></div></div></section>;
+}

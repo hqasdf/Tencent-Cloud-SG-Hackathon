@@ -78,14 +78,18 @@ export class RouteDeviationDisputePipeline {
         evidence_count: evidenceCatalog.size
       },
       policy_result: policyResult,
-      ruling: judgment.ruling,
-      recommended_action: judgment.recommended_action,
-      refund_amount: judgment.refund_amount,
+      ruling: executable ? judgment.ruling : "PENDING_HUMAN_REVIEW",
+      recommended_action: executable
+        ? judgment.recommended_action
+        : "ESCALATE_TO_HUMAN_REVIEW",
+      refund_amount: executable ? judgment.refund_amount : 0,
       confidence: confidence.score,
       confidence_details: confidence.inputs,
       escalation_reasons: confidence.escalation_reasons,
       resolution_mode: confidence.resolution_mode,
-      explanation: judgment.explanation,
+      explanation: executable
+        ? judgment.explanation
+        : "The available evidence does not support an executable automated ruling. A human reviewer must resolve this dispute.",
       counterfactual_explanation: judgment.counterfactual_explanation,
       audit: {
         schema_version: "route_deviation_resolution_v1",

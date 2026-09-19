@@ -2,3 +2,9 @@ node_modules/
 coverage/
 .env
 *.log
+dist/
+*.tsbuildinfo
+__pycache__/
+.pytest_cache/
+.venv/
+.playwright-cli/
