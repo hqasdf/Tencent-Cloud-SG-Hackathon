@@ -1,0 +1,53 @@
+{
+  "case_id": "CASE_ROUTE_001",
+  "dispute_type": "route_deviation",
+  "trip": {
+    "expected_route": {
+      "distance_km": 10,
+      "duration_minutes": 20
+    },
+    "actual_route": {
+      "distance_km": 13,
+      "duration_minutes": 28
+    },
+    "fare": {
+      "expected_amount": 18,
+      "actual_amount": 22.5,
+      "currency": "SGD"
+    },
+    "events": [
+      {
+        "timestamp": "2026-09-19T10:00:00+08:00",
+        "type": "trip_started",
+        "description": "Trip started",
+        "evidence_ids": ["GPS_001"]
+      },
+      {
+        "timestamp": "2026-09-19T10:28:00+08:00",
+        "type": "trip_completed",
+        "description": "Trip completed",
+        "evidence_ids": ["GPS_001", "FARE_001"]
+      }
+    ]
+  },
+  "evidence": [
+    {
+      "id": "GPS_001",
+      "type": "actual_route",
+      "source": "trip_telemetry",
+      "valid": true
+    },
+    {
+      "id": "ROUTE_BASELINE_001",
+      "type": "baseline_route",
+      "source": "approved_route_baseline",
+      "valid": true
+    },
+    {
+      "id": "FARE_001",
+      "type": "fare",
+      "source": "payment_ledger",
+      "valid": true
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "id": "route-deviation",
+  "version": "1.0.0",
+  "currency": "SGD",
+  "thresholds": {
+    "distance_deviation_pct": 15,
+    "duration_deviation_pct": 20,
+    "auto_resolve_confidence": 0.75,
+    "maximum_refund": 50
+  },
+  "required_evidence_types": [
+    "actual_route",
+    "baseline_route",
+    "fare"
+  ],
+  "justification_evidence_types": [
+    "traffic",
+    "road_closure",
+    "rider_request",
+    "safety"
+  ],
+  "rules": [
+    {
+      "id": "ROUTE_POLICY_01",
+      "description": "A route deviation is significant when distance is at least 15% above baseline or duration is at least 20% above baseline."
+    },
+    {
+      "id": "ROUTE_POLICY_02",
+      "description": "A significant deviation is justified only when valid evidence supports traffic, road closure, rider request, or safety context."
+    },
+    {
+      "id": "ROUTE_POLICY_03",
+      "description": "For an unjustified significant deviation, refund the positive fare difference, capped at SGD 50."
+    }
+  ]
+}

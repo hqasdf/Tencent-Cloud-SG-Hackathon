@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/casedetail.tsx","./src/components/disputedashboard.tsx","./src/mocks/cases.ts","./src/services/caseservice.ts","./src/types/dispute.ts","./src/utils/format.ts"],"version":"5.9.3"}
