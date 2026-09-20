@@ -1,3 +1,7 @@
+/**
+ * ⚠️ LEGACY — the Judge is deliberately NOT implemented in the active backend.
+ * The Stage 4 pipeline reports JUDGE as NOT_RUN. This file is frozen for reference.
+ */
 export class JudgeAgent {
   decide({ verifiedClaims, policyResult, replay }) {
     if (!verifiedClaims.every((claim) => claim.verified === true)) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.models.advocate import AdvocateRunResponse
 from app.models.analysis import CaseAnalysisResponse
 from app.models.case import CaseMetadata, CaseSummary, ConfidenceBreakdown, DisputeCase, PolicyResult, Resolution
 from app.repositories.case_repository import CaseRepository
@@ -48,6 +49,21 @@ class CaseService:
 
     def get_analysis(self, case_id: str) -> CaseAnalysisResponse:
         return self._analysis_service.analyze(self._load_case(case_id))
+
+    def get_advocate_run(self, case_id: str) -> AdvocateRunResponse:
+        """Run the Stage 4 advocates for a case.
+
+        The case and its deterministic analysis are computed through the same
+        canonical path used by get_case and get_analysis, so advocate results can
+        never disagree with the deterministic record. The orchestrator receives
+        them read-only and cannot mutate them.
+        """
+        from app.services.advocate_orchestrator import AdvocateOrchestratorService
+
+        case = self._load_case(case_id)
+        analysis = self._analysis_service.analyze(case)
+        orchestrator = AdvocateOrchestratorService()
+        return orchestrator.run(case, analysis)
 
     def _load_case(self, case_id: str) -> DisputeCase:
         case = self._repository.get_case(case_id)

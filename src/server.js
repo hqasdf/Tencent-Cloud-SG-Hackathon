@@ -1,3 +1,10 @@
+/**
+ * ⚠️ LEGACY IMPLEMENTATION — NOT USED BY THE RUNNING REACT + FASTAPI APPLICATION.
+ * THE ACTIVE BACKEND IS `backend/`.
+ *
+ * This Node server is the original spike and is retained for reference only.
+ * It is frozen: not integrated, not extended, and not deleted.
+ */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
