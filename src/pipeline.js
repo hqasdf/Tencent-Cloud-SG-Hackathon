@@ -1,3 +1,10 @@
+/**
+ * ⚠️ LEGACY IMPLEMENTATION — NOT USED BY THE RUNNING REACT + FASTAPI APPLICATION.
+ * THE ACTIVE BACKEND IS `backend/`.
+ *
+ * The Stage 4 advocates live in `backend/app/agents/`. This pipeline is frozen
+ * for reference and must not be extended.
+ */
 import { assertResolutionShape, validateDisputeInput } from "./contracts.js";
 import { CaseReplay } from "./case-replay.js";
 import { buildEvidenceCatalog, detectContradictions, verifyClaims } from "./evidence.js";

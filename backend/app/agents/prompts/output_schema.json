@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AdvocateOutput",
+  "description": "Shared output schema for the Rider Advocate and the Driver Advocate. Both sides use this exact schema; only the `side` value differs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["side", "summary", "claims", "requestedOutcome", "contextAcknowledged"],
+  "properties": {
+    "side": {
+      "type": "string",
+      "enum": ["RIDER", "DRIVER"],
+      "description": "Must match the side you were assigned. Submitting the other side is rejected."
+    },
+    "summary": {
+      "type": "string",
+      "description": "One to three sentences summarising the strongest honest position for your side."
+    },
+    "claims": {
+      "type": "array",
+      "description": "May be empty if no claim is supported by the supplied evidence. An empty list is valid.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claimId", "claim", "evidenceIds", "policyRefs", "reasoningSummary", "importance"],
+        "properties": {
+          "claimId": {
+            "type": "string",
+            "description": "Unique within this output, e.g. R1, R2, D1."
+          },
+          "claim": {
+            "type": "string",
+            "description": "A single factual assertion. Must be supported by the cited evidence."
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Evidence IDs from the supplied context only. Never invent an ID."
+          },
+          "policyRefs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Policy rule IDs from the supplied context only."
+          },
+          "reasoningSummary": {
+            "type": "string",
+            "description": "Why the cited evidence supports this side."
+          },
+          "importance": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW"]
+          },
+          "assertedFacts": {
+            "type": "array",
+            "description": "Measured values quoted from the trusted context, so they can be verified.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fact", "value"],
+              "properties": {
+                "fact": {
+                  "type": "string",
+                  "enum": [
+                    "EXPECTED_DISTANCE_KM",
+                    "ACTUAL_DISTANCE_KM",
+                    "DISTANCE_DIFFERENCE_KM",
+                    "DEVIATION_PERCENTAGE",
+                    "EXPECTED_DURATION_MINUTES",
+                    "ACTUAL_DURATION_MINUTES",
+                    "DURATION_DIFFERENCE_MINUTES",
+                    "EXPECTED_FARE",
+                    "ACTUAL_FARE",
+                    "FARE_DIFFERENCE",
+                    "EXPLAINED_DEVIATION_KM",
+                    "UNEXPLAINED_DEVIATION_KM",
+                    "DRIVER_PICKUP_DISTANCE_METERS",
+                    "WITHIN_PICKUP_RADIUS",
+                    "WAITING_DURATION_SECONDS",
+                    "CANCELLATION_CHARGE_AMOUNT"
+                  ]
+                },
+                "value": {
+                  "type": ["number", "boolean", "string"]
+                }
+              }
+            }
+          },
+          "disputedEvidenceIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional. Evidence you consider unreliable or contested."
+          }
+        }
+      }
+    },
+    "requestedOutcome": {
+      "type": "string",
+      "enum": [
+        "FULL_REFUND",
+        "PARTIAL_REFUND",
+        "NO_REFUND",
+        "UPHOLD_CHARGE",
+        "REFUND_CHARGE",
+        "HUMAN_REVIEW"
+      ],
+      "description": "The outcome you advocate for. This is a position, not a ruling, and never a refund amount."
+    },
+    "contextAcknowledged": {
+      "type": "boolean",
+      "description": "Set true to confirm you reasoned only from the supplied context."
+    }
+  }
+}

@@ -8,7 +8,13 @@ client = TestClient(app)
 def test_health_returns_success() -> None:
     response = client.get("/api/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "ryderesolve-case-api"}
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["service"] == "ryderesolve-case-api"
+    # Agent configuration is reported without ever exposing a credential.
+    assert payload["agents"]["mode"] == "mock"
+    assert payload["agents"]["configured"] is True
+    assert "api_key" not in str(payload["agents"]).lower()
 
 
 def test_list_cases_returns_dashboard_summaries() -> None:

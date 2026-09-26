@@ -1,3 +1,7 @@
+/**
+ * ⚠️ LEGACY — the active advocates are `backend/app/agents/rider_advocate.py` and
+ * `backend/app/agents/driver_advocate.py`. This file is frozen for reference.
+ */
 import { findEvidenceByType } from "./evidence.js";
 
 class AdvocateAgent {

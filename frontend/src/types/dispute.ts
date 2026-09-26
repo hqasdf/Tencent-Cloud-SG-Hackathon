@@ -10,13 +10,22 @@ export interface FareInfo { currency: string; quoted: number; actual: number; di
 export interface CaseMetadata { submittedAt: string; lastUpdated: string; priority: "Standard" | "High"; policyVersion: string; }
 export interface TimelineEvent { id: string; timestamp: string; type: string; description: string; evidenceIds: string[]; severity?: "normal" | "attention" | "conflict"; }
 export interface Evidence { id: string; type: "GPS" | "Chat" | "Fare" | "Trip event" | "Policy" | "Traffic" | "System"; timestamp: string; source: string; summary: string; status: EvidenceStatus; }
+/**
+ * LEGACY placeholder advocate authoring.
+ *
+ * Superseded by the Stage 4 live advocates in `types/advocate.ts`, which are
+ * produced and verified by the backend. These fields are retained only because
+ * the case payload still carries them; they are NO LONGER RENDERED anywhere in
+ * the UI. Do not reintroduce a second, hardcoded advocate panel alongside the
+ * live one.
+ */
 export interface AdvocateClaim { id: string; claim: string; evidenceIds: string[]; policyRefs: string[]; status: ClaimStatus; reason?: string; }
 export interface AdvocateCase { party: "Rider" | "Driver"; summary: string; claims: AdvocateClaim[]; }
 export interface PolicyResult { policyId: string; name: string; ruleSummary: string; outcome: string; }
 export interface ConfidenceBreakdown { evidenceCompleteness: number; contradictoryEvidence: number; policyClarity: number; missingInformation: number; advocateDisagreement: number; overall: number; }
 export interface Resolution { ruling: string; recommendedAction: string; refundAmount: number; currency: string; acceptedClaimIds: string[]; rejectedClaimIds: string[]; mode: ResolutionMode; explanation: string; counterfactualExplanation: string; escalationReason?: string; }
 export interface AgentActivity { id: string; label: string; state: "complete" | "active" | "queued"; detail: string; }
-export interface DisputeCase { id: string; disputeType: DisputeType; title: string; status: CaseStatus; description: string; rider: Person; driver: Person; trip: TripInfo; fare: FareInfo; riderComplaint: string; driverResponse: string; metadata: CaseMetadata; timeline: TimelineEvent[]; evidence: Evidence[]; riderCase: AdvocateCase; driverCase: AdvocateCase; activity: AgentActivity[]; policyResult: PolicyResult; confidence: ConfidenceBreakdown; resolution: Resolution; humanReviewSummary?: string; }
+export interface DisputeCase { id: string; disputeType: DisputeType; title: string; status: CaseStatus; description: string; rider: Person; driver: Person; trip: TripInfo; fare: FareInfo; riderComplaint: string; driverResponse: string; metadata: CaseMetadata; timeline: TimelineEvent[]; evidence: Evidence[]; /** @deprecated use AdvocateRunResult from types/advocate.ts */ riderCase: AdvocateCase; /** @deprecated use AdvocateRunResult from types/advocate.ts */ driverCase: AdvocateCase; activity: AgentActivity[]; policyResult: PolicyResult; confidence: ConfidenceBreakdown; resolution: Resolution; humanReviewSummary?: string; }
 export interface CaseSummary { id: string; disputeType: DisputeType; title: string; status: CaseStatus; rider: Person; driver: Person; confidence: ConfidenceBreakdown; resolution: Resolution; }
 export interface DeterministicAnalysis { analysisType: DisputeType; [key: string]: string | number | boolean | string[] | Condition[] | undefined; }
 export interface Condition { type: string; explainedDistanceKm: number; evidenceIds: string[]; }
