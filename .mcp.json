@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "trtc-push-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@tencent-rtc/trtc-push-mcp@1"
+      ],
+      "env": {
+        "PATH": "C:\\Program Files\\nodejs;C:\\Users\\ephra\\AppData\\Local\\npm-cache\\_npx\\161e75c3c5f18ed3\\node_modules\\.bin;C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\node_modules\\.bin;C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\node_modules\\.bin;C:\\Users\\ephra\\OneDrive\\SP\\node_modules\\.bin;C:\\Users\\ephra\\OneDrive\\node_modules\\.bin;C:\\Users\\ephra\\node_modules\\.bin;C:\\Users\\node_modules\\.bin;C:\\node_modules\\.bin;C:\\Program Files\\nodejs\\node_modules\\npm\\node_modules\\@npmcli\\run-script\\lib\\node-gyp-bin;\"C:\\Users\\ephra\\AppData\\Local\\Programs\\Opera\";C:\\Program Files (x86)\\VMware\\VMware Workstation\\bin\\;C:\\windows\\system32;C:\\windows;C:\\windows\\System32\\Wbem;C:\\windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\Users\\Administrator\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\HP\\OMEN-Broadcast\\Common;C:\\Program Files\\NVIDIA Corporation\\NVIDIA App\\NvDLISR;C:\\Program Files\\PuTTY\\;C:\\Program Files\\nodejs\\;C:\\Program Files\\Git\\cmd;C:\\Users\\ephra\\AppData\\Local\\Muse Hub\\lib;C:\\Program Files\\Git LFS;C:\\Program Files\\dotnet\\;%USERPROFILE%\\AppData\\Local\\Muse Hub\\lib;C:\\Users\\ephra\\anaconda3\\envs\\gpu_env\\Library\\bin;C:\\Users\\ephra\\AppData\\Local\\Programs\\Python\\Launcher\\;C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\;C:\\Users\\ephra\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\ephra\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\Users\\ephra\\AppData\\Roaming\\npm;C:\\Users\\ephra\\AppData\\Local\\Python\\bin;C:\\Users\\ephra\\AppData\\Local\\Programs\\Antigravity\\bin;C:\\Users\\ephra\\AppData\\Local\\Programs\\Ollama;C:\\Users\\ephra\\.local\\bin;C:\\Users\\ephra\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin;C:\\Users\\ephra\\AppData\\Local\\GitHubDesktop\\bin;C:\\Users\\ephra\\AppData\\Local\\Programs\\mongosh\\;C:\\Users\\ephra\\AppData\\Local\\Microsoft\\WinGet\\Links;C:\\windows\\System32"
+      }
+    }
+  }
+}

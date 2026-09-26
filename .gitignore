@@ -8,3 +8,11 @@ __pycache__/
 .pytest_cache/
 .venv/
 .playwright-cli/
+backend/intake.db
+backend/*.db
+_b64_*.txt
+_gen*.py
+_gen*.ps1
+_psw.ps1
+_writefile.py
+_write_intake.py

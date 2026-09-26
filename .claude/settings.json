@@ -1,0 +1,69 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.claude\\skills\\trtc\\runtime\\telemetry.cjs' hook --ide 'claude' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon'"
+          }
+        ],
+        "__trtc_agent_skills__": true
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c pass"
+          }
+        ],
+        "__trtc_agent_skills__": true
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c pass"
+          },
+          {
+            "type": "command",
+            "command": "python -c pass"
+          },
+          {
+            "type": "command",
+            "command": "python -c pass"
+          }
+        ],
+        "__trtc_agent_skills__": true
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.claude\\skills\\trtc\\runtime\\stop-hook-dispatcher.cjs' --ide 'claude' --runtime-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.claude\\skills\\trtc\\runtime\\telemetry.cjs' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon' --guard-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.claude\\skills\\trtc\\hooks\\stop_require_apply_evidence.py'"
+          }
+        ],
+        "__trtc_agent_skills__": true
+      }
+    ]
+  },
+  "__trtc_agent_skills__": {
+    "version": "1.1.1",
+    "hookEvents": [
+      "UserPromptSubmit",
+      "PreToolUse",
+      "Stop"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "mcp__trtc-push-mcp__*"
+    ]
+  }
+}

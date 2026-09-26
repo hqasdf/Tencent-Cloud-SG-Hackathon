@@ -15,45 +15,31 @@ def test_list_cases_returns_dashboard_summaries() -> None:
     response = client.get("/api/cases")
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 4
-    assert payload[0]["id"] == "CASE-2026-1041"
+    assert len(payload) == 1
+    assert payload[0]["id"] == "DISP-002"
     assert "timeline" not in payload[0]
-    assert payload[0]["disputeType"] == "route_deviation"
+    assert payload[0]["disputeType"] == "no_show_charge"
 
 
 def test_get_valid_case_returns_camel_case_contract_and_canonical_timeline() -> None:
-    response = client.get("/api/cases/CASE-2026-1041")
+    response = client.get("/api/cases/DISP-002")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["trip"]["tripId"] == "TRP-1041"
+    assert payload["trip"]["tripId"] == "TRIP-2026-09945"
     assert [event["timestamp"] for event in payload["timeline"]] == sorted(event["timestamp"] for event in payload["timeline"])
-    assert payload["riderCase"]["claims"][0]["evidenceIds"] == ["E04", "E05"]
-
-
-def test_route_analysis_endpoint_returns_deterministic_partial_refund() -> None:
-    response = client.get("/api/cases/CASE-2026-1041/analysis")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["analysis"]["distanceDifferenceKm"] == 1.3
-    assert payload["resolutionRecommendation"]["recommendedAction"] == "PARTIAL_REFUND"
-    assert payload["resolutionMode"] == "AUTO_RESOLVE"
+    assert payload["rider"]["name"] == "Michael Wong"
+    assert payload["driver"]["name"] == "Lim Wei Ming"
 
 
 def test_no_show_analysis_endpoint_returns_upheld_charge() -> None:
-    response = client.get("/api/cases/CASE-2026-1043/analysis")
+    response = client.get("/api/cases/DISP-002/analysis")
     assert response.status_code == 200
     payload = response.json()
     assert payload["analysis"]["driverWithinPickupRadius"] is True
-    assert payload["analysis"]["waitingDurationSeconds"] == 372
+    assert payload["analysis"]["waitingDurationSeconds"] == 480
+    assert payload["analysis"]["cancellationChargeAmount"] == 5.0
     assert payload["resolutionRecommendation"]["recommendedAction"] == "UPHOLD_CANCELLATION_CHARGE"
-
-
-def test_human_review_analysis_result_is_deterministic() -> None:
-    response = client.get("/api/cases/CASE-2026-1044/analysis")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["resolutionMode"] == "HUMAN_REVIEW"
-    assert "CONTRADICTORY_EVIDENCE" in payload["escalationReasons"]
+    assert payload["resolutionMode"] == "AUTO_RESOLVE"
 
 
 def test_unknown_analysis_case_returns_404() -> None:

@@ -1,0 +1,72 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\telemetry.cjs' hook --ide 'codebuddy' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c pass"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c pass"
+          },
+          {
+            "type": "command",
+            "command": "python -c pass"
+          },
+          {
+            "type": "command",
+            "command": "python -c pass"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\stop-hook-dispatcher.cjs' --ide 'codebuddy' --runtime-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\telemetry.cjs' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon' --guard-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\hooks\\stop_require_apply_evidence.py'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "ask_followup_question|ask_user_question|AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\stop-hook-dispatcher.cjs' --ide 'codebuddy' --runtime-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\telemetry.cjs' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon' --guard-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\hooks\\stop_require_apply_evidence.py'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Write|Edit|Grep|Glob|ask_followup_question|ask_user_question|AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'C:\\Program Files\\nodejs\\node.exe' 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\stop-hook-dispatcher.cjs' --ide 'codebuddy' --runtime-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\runtime\\telemetry.cjs' --cwd 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon' --guard-path 'C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.codebuddy\\skills\\trtc\\hooks\\stop_require_apply_evidence.py' --notice-only"
+          }
+        ]
+      }
+    ]
+  }
+}

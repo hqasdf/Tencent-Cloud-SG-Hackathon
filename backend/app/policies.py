@@ -48,7 +48,7 @@ NO_SHOW_POLICY_V1 = NoShowPolicy(
     version="1.0.0-prototype",
     pickup_radius_meters=100.0,
     minimum_wait_seconds=300,
-    required_evidence_ids=("E02", "E04", "E07"),
+    required_evidence_ids=("E02", "E04", "E05", "E06"),
     auto_resolve_confidence_threshold=0.75,
 )
 

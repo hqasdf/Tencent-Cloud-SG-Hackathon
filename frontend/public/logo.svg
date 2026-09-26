@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 64" width="140" height="64">
+  <g fill="#FF3A6E">
+    <!-- Stylized rvde logo wordmark in the brand pink -->
+    <text x="0" y="46" font-family="Manrope, Arial, sans-serif" font-size="48" font-weight="800" letter-spacing="-2" font-style="italic">rvde</text>
+    <circle cx="38" cy="38" r="3.5" fill="#FFB0CC"/>
+  </g>
+</svg>

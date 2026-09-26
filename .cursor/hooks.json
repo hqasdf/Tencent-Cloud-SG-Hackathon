@@ -1,0 +1,50 @@
+{
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "\"C:\\Program Files\\nodejs\\node.exe\" \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\skills\\trtc\\runtime\\telemetry.cjs\" hook --ide \"cursor\" --cwd \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\"",
+        "__trtc_agent_skills__": true
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "python3 \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\hooks\\trtc-agent-skills\\cursor-adapter.py\" gate-slice-read",
+        "__trtc_agent_skills__": true
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "python3 \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\hooks\\trtc-agent-skills\\cursor-adapter.py\" topic-phase-gate",
+        "__trtc_agent_skills__": true
+      },
+      {
+        "command": "python3 \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\hooks\\trtc-agent-skills\\cursor-adapter.py\" gate-slice-write",
+        "__trtc_agent_skills__": true
+      },
+      {
+        "command": "python3 \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\hooks\\trtc-agent-skills\\cursor-adapter.py\" pretooluse-require-business-decisions",
+        "__trtc_agent_skills__": true
+      }
+    ],
+    "stop": [
+      {
+        "command": "python3 \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\hooks\\trtc-agent-skills\\cursor-adapter.py\" stop-apply-evidence",
+        "__trtc_agent_skills__": true
+      },
+      {
+        "command": "\"C:\\Program Files\\nodejs\\node.exe\" \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\.cursor\\skills\\trtc\\runtime\\telemetry.cjs\" host-stop --ide \"cursor\" --cwd \"C:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\"",
+        "__trtc_agent_skills__": true
+      }
+    ]
+  },
+  "__trtc_agent_skills__": {
+    "version": "1.1.1",
+    "hookEvents": [
+      "beforeSubmitPrompt",
+      "beforeReadFile",
+      "preToolUse",
+      "stop"
+    ]
+  },
+  "version": 1
+}
