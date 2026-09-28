@@ -43,6 +43,29 @@ export interface ClaimWarning {
   detail: string;
 }
 
+/**
+ * Per-advocate execution metrics for a single model call.
+ *
+ * `malformedOutput` distinguishes "the model answered but the answer was
+ * unusable" from "the model was never reached". Token fields are nullable
+ * because a gateway that does not report usage must not look like one that
+ * reported zero.
+ */
+export interface AgentCallMetadata {
+  provider: string;
+  model: string | null;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  generatedClaimCount: number;
+  verifiedClaimCount: number;
+  rejectedClaimCount: number;
+  rejectionReasons: string[];
+  malformedOutput: boolean;
+  failureCode: string | null;
+}
+
 export interface AdvocateSideResult {
   side: AdvocateSide;
   status: AdvocateStatus;
@@ -53,6 +76,7 @@ export interface AdvocateSideResult {
   rejectedClaims: RejectedClaim[];
   warnings: ClaimWarning[];
   failureReason: string | null;
+  execution: AgentCallMetadata | null;
 }
 
 export interface AgentRunMetadata {
@@ -61,6 +85,9 @@ export interface AgentRunMetadata {
   model: string | null;
   promptVersion: string;
   durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
 }
 
 export interface VerificationSummary {

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.agent import AdvocateSide, AgentRunMetadata, ClaimImportance
+from app.models.agent import AdvocateSide, AgentCallMetadata, AgentRunMetadata, ClaimImportance
 
 
 class AdvocateModel(BaseModel):
@@ -80,6 +80,7 @@ class AdvocateSideResult(AdvocateModel):
     rejected_claims: list[ClaimRejection] = Field(default_factory=list, serialization_alias="rejectedClaims", validation_alias="rejectedClaims")
     warnings: list[ClaimWarning] = Field(default_factory=list)
     failure_reason: str | None = Field(default=None, serialization_alias="failureReason", validation_alias="failureReason")
+    execution: AgentCallMetadata | None = None
 
 
 class VerificationSummary(AdvocateModel):

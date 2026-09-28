@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi.testclient import TestClient
 
+from app.data.cases import MOCK_CASES
 from app.llm.hunyuan_client import HunyuanResult
 from app.main import app
 from app.repositories.intake_repository import IntakeCaseRepository
@@ -66,8 +67,14 @@ def test_list_known_trips(client: TestClient):
     response = client.get("/api/intake/trips")
     assert response.status_code == 200
     trips = response.json()
+
+    # Every registered trip must be selectable. Deriving the expectation from the
+    # fixture registry rather than a hardcoded count keeps this correct when a
+    # case is added.
+    assert set(trips) == {case.trip.trip_id for case in MOCK_CASES}
+
+    # The no-show fixture the intake flow's end-to-end test walks through.
     assert "TRIP-2026-09945" in trips
-    assert len(trips) == 1
 
 
 def test_create_intake_case_valid_trip(client: TestClient):

@@ -10,6 +10,9 @@ __pycache__/
 .playwright-cli/
 backend/intake.db
 backend/*.db
+# Stage 4C raw benchmark output. Local by nature and full of run-specific
+# timings; a curated report can be committed separately if the hackathon needs one.
+backend/benchmark_results/
 _b64_*.txt
 _gen*.py
 _gen*.ps1

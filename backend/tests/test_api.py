@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.data.cases import MOCK_CASES
 from app.main import app
 
 client = TestClient(app)
@@ -21,10 +22,23 @@ def test_list_cases_returns_dashboard_summaries() -> None:
     response = client.get("/api/cases")
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 1
-    assert payload[0]["id"] == "DISP-002"
-    assert "timeline" not in payload[0]
-    assert payload[0]["disputeType"] == "no_show_charge"
+
+    # The dashboard must expose exactly the registered fixtures. Comparing against
+    # the fixture registry rather than a hardcoded count keeps this test honest
+    # when a case is added or removed.
+    assert {item["id"] for item in payload} == {case.id for case in MOCK_CASES}
+
+    # Summaries are trimmed: the list view must not carry a full timeline, and
+    # every row must declare a dispute type the UI knows how to render.
+    for item in payload:
+        assert "timeline" not in item
+        assert item["disputeType"] in ("route_deviation", "no_show_charge")
+
+    # A representative case carries the fields the dashboard renders.
+    summary = next(item for item in payload if item["id"] == "DISP-002")
+    assert summary["disputeType"] == "no_show_charge"
+    assert summary["rider"]["name"]
+    assert summary["driver"]["name"]
 
 
 def test_get_valid_case_returns_camel_case_contract_and_canonical_timeline() -> None:

@@ -58,6 +58,7 @@ function RejectedCard({ claim }: { claim: RejectedClaim }) {
 
 function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
   const failed = side.status === "FAILED";
+  const execution = side.execution;
   return (
     <section className={`panel advocate ${failed ? "advocate-failed" : ""}`}>
       <div className="panel-heading">
@@ -67,6 +68,21 @@ function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
         </div>
         <span className={`party-badge ${failed ? "failed" : ""}`}>{side.status}</span>
       </div>
+
+      {/* Per-call cost signal. Latency and tokens belong to this advocate's own
+          model call, not to the run as a whole, so they sit next to the result. */}
+      {execution && (
+        <div className="call-meta">
+          <span>{execution.provider}</span>
+          {execution.model && <span>{execution.model}</span>}
+          <span>{execution.durationMs} ms</span>
+          {execution.totalTokens !== null && <span>{execution.totalTokens} tokens</span>}
+          {execution.generatedClaimCount > 0 && (
+            <span>{execution.generatedClaimCount} claims generated</span>
+          )}
+          {execution.malformedOutput && <span className="call-meta-bad">unusable output</span>}
+        </div>
+      )}
 
       {failed ? (
         <p className="review-reason">{side.failureReason ?? "The advocate could not produce an argument."}</p>
@@ -140,14 +156,29 @@ export function AdvocateRunPanel({ result, running, error, onRun }: AdvocateRunP
             <span className="eyebrow">Stage 4 · Advocates</span>
             <h3>Rider and Driver advocates</h3>
           </div>
-          <button onClick={onRun} disabled={running} className="run-advocates">
-            {running ? "Running advocates…" : result ? "Run again" : "Run advocates"}
-          </button>
+          <div className="advocate-heading-actions">
+            {result && (
+              // The demo must never be able to imply a mock response is live AI,
+              // so the mode is stated explicitly rather than left to the model field.
+              <span className={`mode-badge ${result.agentRun.mode}`}>
+                {result.agentRun.mode === "real" ? "REAL MODEL" : "MOCK"}
+              </span>
+            )}
+            <button onClick={onRun} disabled={running} className="run-advocates">
+              {running ? "Running advocates…" : result ? "Run again" : "Run advocates"}
+            </button>
+          </div>
         </div>
         <p className="prototype-note">
           CODE calculates the facts. The advocates argue from those facts. CODE then verifies every
           claim. The Judge stage is not part of this milestone and is reported as not run.
         </p>
+        {result?.agentRun.mode === "mock" && (
+          <p className="mode-note">
+            Mock mode: deterministic, offline output derived from the case context. No live model was
+            called.
+          </p>
+        )}
         {error && <p className="review-reason">{error}</p>}
         {result && (
           <>
@@ -155,6 +186,11 @@ export function AdvocateRunPanel({ result, running, error, onRun }: AdvocateRunP
               <span><small>Mode</small><b>{result.agentRun.mode}</b></span>
               <span><small>Provider</small><b>{result.agentRun.provider}</b></span>
               <span><small>Model</small><b>{result.agentRun.model ?? "n/a (mock)"}</b></span>
+              <span><small>Duration</small><b>{result.agentRun.durationMs} ms</b></span>
+              <span>
+                <small>Tokens</small>
+                <b>{result.agentRun.totalTokens ?? "n/a"}</b>
+              </span>
               <span><small>Prompts</small><b>{result.agentRun.promptVersion}</b></span>
               <span><small>Verified</small><b>{result.verificationSummary.verifiedCount}</b></span>
               <span><small>Rejected</small><b>{result.verificationSummary.rejectedCount}</b></span>

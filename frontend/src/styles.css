@@ -1038,3 +1038,354 @@ code {
   .intake-trip-select select { min-width: 100%; }
   .phone-frame { max-width: 100%; }
 }
+/* ---------------------------------------------------------------------------
+   Stage 4 · Rider + Driver advocate panels
+   Restored after the merge rewrote this stylesheet and dropped these rules.
+   Uses the --rvde-* design tokens so it matches the current theme.
+   --------------------------------------------------------------------------- */
+.advocate-control .run-advocates {
+  border: 0;
+  border-radius: 9px;
+  background: var(--rvde-pink);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 10px 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.advocate-control .run-advocates:hover:not(:disabled) { background: var(--rvde-pink-deep); }
+.advocate-control .run-advocates:disabled { background: var(--rvde-text-muted); cursor: progress; }
+
+.advocate-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* MOCK vs REAL must be unmistakable: the demo must never be able to imply a
+   deterministic mock response was produced by a live model. */
+.mode-badge {
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.mode-badge.mock {
+  background: var(--rvde-cream);
+  color: var(--rvde-text-soft);
+  border-color: var(--rvde-border);
+}
+.mode-badge.real {
+  background: var(--rvde-success-bg);
+  color: var(--rvde-success);
+  border-color: #BFE9D5;
+}
+
+.mode-note {
+  margin-top: 10px !important;
+  font-size: 11px !important;
+  color: var(--rvde-text-soft) !important;
+}
+
+.advocate-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 9px;
+  margin-top: 14px;
+}
+.advocate-meta span {
+  background: var(--rvde-cream-soft);
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 9px;
+  padding: 9px;
+}
+.advocate-meta small,
+.advocate-meta b { display: block; }
+.advocate-meta small {
+  color: var(--rvde-text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 800;
+}
+.advocate-meta b { font-size: 12px; margin-top: 4px; }
+
+/* Per-call cost signal shown next to each advocate's own result. */
+.call-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.call-meta span {
+  background: var(--rvde-cream);
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--rvde-text-soft);
+}
+.call-meta .call-meta-bad {
+  background: var(--rvde-danger-bg);
+  border-color: #F3CFC9;
+  color: var(--rvde-danger);
+}
+
+.judge-not-run {
+  margin-top: 12px !important;
+  font-size: 11px !important;
+  color: var(--rvde-warn) !important;
+  background: var(--rvde-warn-bg);
+  border: 1px solid #F0DCB8;
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.pipeline-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.pipeline-node {
+  border: 1px solid var(--rvde-border);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 9px;
+}
+.pipeline-node span {
+  display: block;
+  color: var(--rvde-text-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.pipeline-node b { display: block; font-size: 11px; margin-top: 5px; }
+.pipeline-node.complete b { color: var(--rvde-success); }
+.pipeline-node.failed b { color: var(--rvde-danger); }
+.pipeline-node.not_run b { color: var(--rvde-text-muted); }
+.pipeline-node.failed { border-color: #F0D0CA; background: #FFFAFA; }
+.pipeline-node.not_run { background: var(--rvde-cream-soft); }
+
+.claim-top b.verified { color: var(--rvde-success); }
+.claim-top b.rejected { color: var(--rvde-danger); }
+.claim-top { align-items: center; gap: 9px; }
+
+.importance {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-soft);
+}
+.importance.high { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+.importance.medium { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.importance.low { background: var(--rvde-border-soft); color: var(--rvde-text-muted); }
+
+.asserted-facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0; }
+.asserted-facts span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--rvde-cream-soft);
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+.asserted-facts code { color: var(--rvde-navy-soft); font-size: 9px; }
+.asserted-facts b { font-size: 11px; }
+
+.claim .reasoning {
+  font-size: 11px !important;
+  color: var(--rvde-text-soft) !important;
+  margin: 7px 0 !important;
+  font-style: italic;
+}
+
+.outcome-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--rvde-cream-soft);
+  border-radius: 9px;
+  padding: 9px 11px;
+  margin: 11px 0;
+}
+.outcome-row b { font-size: 12px; }
+.outcome-row small.acknowledged {
+  margin-left: auto;
+  color: var(--rvde-success);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.rejection-block {
+  margin-top: 14px;
+  border-top: 1px dashed var(--rvde-border);
+  padding-top: 12px;
+}
+.rejection-note {
+  font-size: 11px !important;
+  color: var(--rvde-text-muted) !important;
+  margin: 6px 0 0 !important;
+}
+.rejected-claim { border-color: #F0D0CA; background: #FFFAFA; }
+
+.warning-block {
+  margin-top: 12px;
+  border-top: 1px dashed var(--rvde-border);
+  padding-top: 10px;
+}
+.warning-block small {
+  display: block;
+  color: var(--rvde-warn);
+  font-size: 10px;
+  line-height: 1.6;
+  margin-bottom: 5px;
+}
+
+.advocate-failed { border-color: #F0D0CA; background: #FFFAFA; }
+.party-badge.failed { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+
+@media (max-width: 1050px) {
+  .advocate-meta { grid-template-columns: repeat(3, 1fr); }
+  .pipeline-strip { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 700px) {
+  .advocate-meta { grid-template-columns: repeat(2, 1fr); }
+  .pipeline-strip { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ─── Stage 5 · Judge ───
+   The advisory column and the deterministic column must not read as the same
+   kind of statement. The advisory side is deliberately lighter and carries a
+   dashed accent; the deterministic side is solid and heavier, because that is
+   the half that actually moves money. */
+.stage5-control { margin-bottom: 14px; }
+
+.judge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.judge-panel { margin-bottom: 0; }
+.judge-panel.advisory { border-left: 3px dashed var(--rvde-border); }
+.judge-panel.deterministic {
+  border-left: 3px solid var(--rvde-navy);
+  background: var(--rvde-cream-soft);
+}
+
+.judge-boundary-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--rvde-text-soft);
+  background: var(--rvde-border-soft);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+}
+
+.judge-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-soft);
+}
+.judge-status-complete { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.judge-status-failed { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+.judge-status-pending_human_review { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.judge-status-not_run { background: var(--rvde-border-soft); color: var(--rvde-text-muted); }
+
+.judge-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--rvde-border-soft);
+  margin-bottom: 10px;
+}
+.judge-outcome b { font-size: 15px; }
+.judge-pending { color: var(--rvde-warn); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.judge-skip { color: var(--rvde-text-muted); }
+
+.judge-reasoning {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--rvde-text);
+  border-left: 2px solid var(--rvde-border);
+  padding-left: 10px;
+  margin: 0 0 12px;
+}
+
+.judge-claims-grid,
+.judge-citations {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.judge-citations { grid-template-columns: 1fr; }
+
+.judge-ids { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+.judge-ids code {
+  font-size: 10px;
+  background: var(--rvde-cream);
+  border: 1px solid var(--rvde-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.judge-empty { font-size: 10px; color: var(--rvde-text-muted); margin: 5px 0 0; }
+
+.judge-issues { margin-top: 10px; }
+.judge-issues > div { margin-bottom: 8px; }
+.judge-issue-code {
+  font-size: 10px;
+  color: var(--rvde-danger);
+  background: var(--rvde-danger-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.judge-issues p { font-size: 11px; margin: 4px 0 0; color: var(--rvde-text-soft); }
+
+.judge-uncertainties ul { margin: 5px 0 0; padding-left: 16px; }
+.judge-uncertainties li { font-size: 11px; line-height: 1.6; color: var(--rvde-text-soft); }
+
+.judge-ruling { font-weight: 700; margin: 10px 0 4px; }
+
+.judge-audit { margin-bottom: 14px; }
+.audit-events { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.audit-event {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--rvde-cream);
+  border: 1px solid var(--rvde-border);
+  border-radius: 6px;
+  padding: 4px 9px;
+}
+.audit-event code { font-size: 9px; letter-spacing: 0.04em; }
+.audit-event time { font-size: 9px; color: var(--rvde-text-muted); }
+
+@media (max-width: 1050px) {
+  .judge-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .judge-claims-grid { grid-template-columns: 1fr; }
+}

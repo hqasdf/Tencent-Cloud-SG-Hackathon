@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.models.advocate import AdvocateRunResponse
 from app.models.analysis import CaseAnalysisResponse
 from app.models.case import CaseMetadata, CaseSummary, ConfidenceBreakdown, DisputeCase, PolicyResult, Resolution
+from app.models.judge import CaseResolutionResponse
 from app.repositories.case_repository import CaseRepository
 from app.services.case_replay import CaseReplayService
 from app.services.dispute_analysis import DisputeAnalysisService
@@ -63,6 +64,20 @@ class CaseService:
         case = self._load_case(case_id)
         analysis = self._analysis_service.analyze(case)
         orchestrator = AdvocateOrchestratorService()
+        return orchestrator.run(case, analysis)
+
+    def get_resolution_run(self, case_id: str) -> CaseResolutionResponse:
+        """Run the full Stage 5 pipeline: advocates, verification, Judge, remedy.
+
+        Kept separate from ``get_advocate_run`` so the Stage 4 endpoint's response
+        contract is untouched. The deterministic analysis is computed once here
+        and passed read-only to the orchestrator, exactly as in Stage 4.
+        """
+        from app.services.resolution_orchestrator import ResolutionOrchestratorService
+
+        case = self._load_case(case_id)
+        analysis = self._analysis_service.analyze(case)
+        orchestrator = ResolutionOrchestratorService()
         return orchestrator.run(case, analysis)
 
     def _load_case(self, case_id: str) -> DisputeCase:

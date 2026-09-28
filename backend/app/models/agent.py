@@ -142,11 +142,48 @@ class AgentCaseContext(AgentModel):
     conflicting_evidence_ids: list[str] = Field(serialization_alias="conflictingEvidenceIds", validation_alias="conflictingEvidenceIds")
 
 
+class AgentCallMetadata(AgentModel):
+    """Per-advocate execution metrics for a single model call.
+
+    This is the record Stage 4C will benchmark from, so it deliberately carries
+    both cost signals (latency, tokens) and quality signals (how many claims the
+    model generated, how many survived deterministic verification, and why the
+    rest did not).
+
+    It never carries the API key, the Authorization header, the raw request, or
+    the raw provider response.
+
+    ``malformed_output`` distinguishes "the model answered but its answer could
+    not be used" from "the model was never reached", because those two failures
+    mean very different things when comparing models.
+    """
+
+    provider: str
+    model: str | None = None
+    duration_ms: int = Field(default=0, serialization_alias="durationMs", validation_alias="durationMs")
+    input_tokens: int | None = Field(default=None, serialization_alias="inputTokens", validation_alias="inputTokens")
+    output_tokens: int | None = Field(default=None, serialization_alias="outputTokens", validation_alias="outputTokens")
+    total_tokens: int | None = Field(default=None, serialization_alias="totalTokens", validation_alias="totalTokens")
+    generated_claim_count: int = Field(default=0, serialization_alias="generatedClaimCount", validation_alias="generatedClaimCount")
+    verified_claim_count: int = Field(default=0, serialization_alias="verifiedClaimCount", validation_alias="verifiedClaimCount")
+    rejected_claim_count: int = Field(default=0, serialization_alias="rejectedClaimCount", validation_alias="rejectedClaimCount")
+    rejection_reasons: list[str] = Field(default_factory=list, serialization_alias="rejectionReasons", validation_alias="rejectionReasons")
+    malformed_output: bool = Field(default=False, serialization_alias="malformedOutput", validation_alias="malformedOutput")
+    failure_code: str | None = Field(default=None, serialization_alias="failureCode", validation_alias="failureCode")
+
+
 class AgentRunMetadata(AgentModel):
-    """Execution metadata for a single advocate run. Never contains secrets."""
+    """Execution metadata for a single advocate run. Never contains secrets.
+
+    Token totals are summed across both advocates and are ``None`` when no
+    provider reported usage, so "not reported" is never confused with zero.
+    """
 
     mode: AgentMode
     provider: str
     model: str | None = None
     prompt_version: str = Field(serialization_alias="promptVersion", validation_alias="promptVersion")
     duration_ms: int = Field(serialization_alias="durationMs", validation_alias="durationMs")
+    input_tokens: int | None = Field(default=None, serialization_alias="inputTokens", validation_alias="inputTokens")
+    output_tokens: int | None = Field(default=None, serialization_alias="outputTokens", validation_alias="outputTokens")
+    total_tokens: int | None = Field(default=None, serialization_alias="totalTokens", validation_alias="totalTokens")

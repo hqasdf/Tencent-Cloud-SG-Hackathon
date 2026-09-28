@@ -3,6 +3,7 @@ import { CaseDetail } from "./components/CaseDetail";
 import { DisputeDashboard } from "./components/DisputeDashboard";
 import { IntakeWorkspace } from "./components/IntakeWorkspace";
 import { CaseApiError, caseService } from "./services/caseService";
+import type { ResolutionRunResult } from "./services/caseService";
 import type { AdvocateRunResult } from "./types/advocate";
 import type { CaseAnalysis, CaseSummary, DisputeCase } from "./types/dispute";
 
@@ -20,6 +21,9 @@ export default function App() {
   const [advocateRun, setAdvocateRun] = useState<AdvocateRunResult | null>(null);
   const [advocateRunning, setAdvocateRunning] = useState(false);
   const [advocateError, setAdvocateError] = useState<string | null>(null);
+  const [resolutionRun, setResolutionRun] = useState<ResolutionRunResult | null>(null);
+  const [resolutionRunning, setResolutionRunning] = useState(false);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
 
   useEffect(() => {
     void caseService.list().then((items) => {
@@ -38,6 +42,9 @@ export default function App() {
     // different case (the panel must never mix old and new advocates).
     setAdvocateRun(null);
     setAdvocateError(null);
+    // The Stage 5 result embeds a whole advocate run, so it is per-case too.
+    setResolutionRun(null);
+    setResolutionError(null);
     void Promise.all([caseService.getById(selectedId), caseService.getAnalysis(selectedId)]).then(([caseData, analysisData]) => {
       setSelectedCase(caseData);
       setAnalysis(analysisData);
@@ -61,7 +68,33 @@ export default function App() {
     }
   }
 
+  async function runResolution() {
+    if (!selectedId) return;
+    setResolutionRunning(true);
+    setResolutionError(null);
+    try {
+      const result = await caseService.runResolution(selectedId);
+      setResolutionRun(result);
+      // The Stage 5 run includes its own advocate output, so the Stage 4 panel
+      // is refreshed from it rather than left showing a different run's result.
+      setAdvocateRun({
+        caseId: result.caseId,
+        disputeType: result.disputeType,
+        rider: result.rider,
+        driver: result.driver,
+        agentRun: result.agentRun,
+        verificationSummary: result.verificationSummary,
+        pipeline: result.pipeline
+      });
+    } catch (requestError: unknown) {
+      setResolutionRun(null);
+      setResolutionError(requestError instanceof Error ? requestError.message : "Unable to run the resolution pipeline.");
+    } finally {
+      setResolutionRunning(false);
+    }
+  }
+
   if (loadingList) return <div className="loading">Loading RydeResolve case workspace…</div>;
   if (error && cases.length === 0) return <div className="app-state"><h1>Case API unavailable</h1><p>{error}</p><button onClick={() => window.location.reload()}>Try again</button></div>;
-  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Operations workspace</small></div></div><div className="sidebar-label">Views</div><nav className="view-toggle"><button className={`case-row ${view === "cases" ? "selected" : ""}`} onClick={() => setView("cases")}><strong>Case workspace</strong><small>Evidence-based disputes</small></button><button className={`case-row ${view === "intake" ? "selected" : ""}`} onClick={() => setView("intake")}><strong>AI intake</strong><small>LLM-guided interviews</small></button></nav>{view === "cases" && <><div className="sidebar-label" style={{marginTop:14}}>Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} · {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav></>}<div className="sidebar-note"><b>Evidence-first routing</b><span>Claims are checked against the case record before policy evaluation.</span></div></aside>{view === "intake" ? <IntakeWorkspace /> : loadingCase ? <div className="loading">Loading case record…</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => setSelectedId(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail caseData={selectedCase} analysis={analysis} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
+  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Operations workspace</small></div></div><div className="sidebar-label">Views</div><nav className="view-toggle"><button className={`case-row ${view === "cases" ? "selected" : ""}`} onClick={() => setView("cases")}><strong>Case workspace</strong><small>Evidence-based disputes</small></button><button className={`case-row ${view === "intake" ? "selected" : ""}`} onClick={() => setView("intake")}><strong>AI intake</strong><small>LLM-guided interviews</small></button></nav>{view === "cases" && <><div className="sidebar-label" style={{marginTop:14}}>Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} · {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav></>}<div className="sidebar-note"><b>Evidence-first routing</b><span>Claims are checked against the case record before policy evaluation.</span></div></aside>{view === "intake" ? <IntakeWorkspace /> : loadingCase ? <div className="loading">Loading case record…</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => setSelectedId(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
 }

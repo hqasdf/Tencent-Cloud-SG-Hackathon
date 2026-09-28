@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "recommendedOutcome",
+    "acceptedRiderClaimIds",
+    "acceptedDriverClaimIds",
+    "rejectedRiderClaimIds",
+    "rejectedDriverClaimIds",
+    "reasoningSummary",
+    "evidenceIds",
+    "policyRuleIds",
+    "uncertainties",
+    "requiresHumanReview"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["COMPLETE", "PENDING_HUMAN_REVIEW"],
+      "description": "COMPLETE only when the case is eligible for an automated outcome. Otherwise PENDING_HUMAN_REVIEW."
+    },
+    "recommendedOutcome": {
+      "type": "string",
+      "description": "The outcome you recommend, chosen from the outcomes listed in your context. Never invent an outcome, and never include an amount.",
+      "enum": [
+        "NO_REFUND",
+        "PARTIAL_REFUND",
+        "FULL_FARE_DIFFERENCE_REFUND",
+        "UPHOLD_CANCELLATION_CHARGE",
+        "REFUND_CANCELLATION_CHARGE"
+      ]
+    },
+    "acceptedRiderClaimIds": {
+      "type": "array",
+      "description": "Verified Rider claim IDs you accept. Must match claim IDs in your context exactly.",
+      "items": { "type": "string" }
+    },
+    "acceptedDriverClaimIds": {
+      "type": "array",
+      "description": "Verified Driver claim IDs you accept. Must match claim IDs in your context exactly.",
+      "items": { "type": "string" }
+    },
+    "rejectedRiderClaimIds": {
+      "type": "array",
+      "description": "Verified Rider claim IDs you do not accept. A claim may not appear in both an accepted and a rejected list.",
+      "items": { "type": "string" }
+    },
+    "rejectedDriverClaimIds": {
+      "type": "array",
+      "description": "Verified Driver claim IDs you do not accept. A claim may not appear in both an accepted and a rejected list.",
+      "items": { "type": "string" }
+    },
+    "reasoningSummary": {
+      "type": "string",
+      "description": "A concise explanation for a human reviewer. Not a chain of thought. Must not contain any monetary amount."
+    },
+    "evidenceIds": {
+      "type": "array",
+      "description": "Evidence IDs you relied on. Every ID must exist in your context.",
+      "items": { "type": "string" }
+    },
+    "policyRuleIds": {
+      "type": "array",
+      "description": "Policy rule IDs you applied. Every ID must exist in your context.",
+      "items": { "type": "string" }
+    },
+    "uncertainties": {
+      "type": "array",
+      "description": "What remains unresolved or unproven. State missing evidence here rather than assuming it.",
+      "items": { "type": "string" }
+    },
+    "requiresHumanReview": {
+      "type": "boolean",
+      "description": "True when this case must be decided by a human. Must be true whenever status is PENDING_HUMAN_REVIEW."
+    }
+  }
+}

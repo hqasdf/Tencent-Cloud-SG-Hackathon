@@ -4,22 +4,28 @@ import json
 
 from app.agents.provider import AgentCompletionRequest, LlmCompletion
 from app.models.agent import AgentCaseContext, NoShowFacts, RouteDeviationFacts
+from app.models.judge import JudgeCaseContext
 
 
 class MockLlmProvider:
-    """Deterministic, offline advocate provider.
+    """Deterministic, offline provider for both the advocates and the Judge.
 
     Output is *derived* from the supplied context rather than being a fixed
     string, so mock mode stays realistic as fixtures evolve while remaining
     fully deterministic for tests. No network access, no credentials.
+
+    The role is read from the request metadata, so one provider serves both
+    agent types without either of them knowing a mock exists.
     """
 
     name = "mock"
 
     def complete(self, request: AgentCompletionRequest) -> LlmCompletion:
-        context = _read_context(request)
-        side = request.metadata.get("side", "RIDER")
-        payload = _rider_output(context) if side == "RIDER" else _driver_output(context)
+        payload = (
+            _judge_output(_read_judge_context(request))
+            if request.metadata.get("role") == "judge"
+            else _advocate_output(request)
+        )
         return LlmCompletion(
             raw_text=json.dumps(payload, indent=2),
             provider_name=self.name,
@@ -28,11 +34,92 @@ class MockLlmProvider:
         )
 
 
+def _advocate_output(request: AgentCompletionRequest) -> dict:
+    context = _read_context(request)
+    side = request.metadata.get("side", "RIDER")
+    return _rider_output(context) if side == "RIDER" else _driver_output(context)
+
+
 def _read_context(request: AgentCompletionRequest) -> AgentCaseContext:
     raw = request.metadata.get("context_json")
     if not raw:
         raise ValueError("MockLlmProvider requires context_json metadata")
     return AgentCaseContext.model_validate_json(raw)
+
+
+def _read_judge_context(request: AgentCompletionRequest) -> JudgeCaseContext:
+    raw = request.metadata.get("context_json")
+    if not raw:
+        raise ValueError("MockLlmProvider requires context_json metadata")
+    return JudgeCaseContext.model_validate_json(raw)
+
+
+def _judge_output(context: JudgeCaseContext) -> dict:
+    """A schema-valid Judge decision derived from the trusted facts.
+
+    Deliberately *not* a copy of the deterministic recommendation: it reaches an
+    outcome by reading the same facts a real Judge would, which keeps mock mode
+    an honest rehearsal of the pipeline rather than a replay of the answer.
+
+    The reasoning text contains no currency token. A real Judge is forbidden from
+    stating an amount, and the mock must not normalise something the validator
+    would reject from a live model.
+    """
+    facts = context.deterministic_facts
+
+    if isinstance(facts, RouteDeviationFacts):
+        unexplained = facts.unexplained_deviation_distance_km
+        outcome = "PARTIAL_REFUND" if unexplained > 0 else "NO_REFUND"
+        if unexplained > 0:
+            reasoning = (
+                f"The measured deviation is {facts.deviation_percentage}% and "
+                f"{unexplained} km of it has no verified explanation in the record, so an "
+                "adjustment is supported by the facts."
+            )
+        else:
+            reasoning = (
+                "Every part of the measured deviation is covered by a verified route "
+                "condition, so the record does not support an adjustment."
+            )
+    else:
+        within = facts.driver_within_pickup_radius
+        outcome = (
+            "UPHOLD_CANCELLATION_CHARGE" if within else "REFUND_CANCELLATION_CHARGE"
+        )
+        reasoning = (
+            "The driver was recorded "
+            + ("inside" if within else "outside")
+            + " the pickup radius and the recorded waiting duration is "
+            + ("above" if within else "below")
+            + " the policy threshold, so the charge is "
+            + ("supported" if within else "not supported")
+            + " by the record."
+        )
+
+    # The deterministic gate decides whether any of this may be automated.
+    pending = context.resolution_mode == "HUMAN_REVIEW"
+    if pending:
+        reasoning += (
+            " A deterministic gate requires human review, so this is an advisory "
+            "summary and not an executable outcome."
+        )
+
+    evidence_ids = sorted({item.id for item in context.evidence})
+    policy_rule_ids = [rule.rule_id for rule in context.applicable_policy.rules]
+
+    return {
+        "status": "PENDING_HUMAN_REVIEW" if pending else "COMPLETE",
+        "recommendedOutcome": outcome,
+        "acceptedRiderClaimIds": [c.claim_id for c in context.rider.verified_claims],
+        "acceptedDriverClaimIds": [c.claim_id for c in context.driver.verified_claims],
+        "rejectedRiderClaimIds": [],
+        "rejectedDriverClaimIds": [],
+        "reasoningSummary": reasoning,
+        "evidenceIds": evidence_ids,
+        "policyRuleIds": policy_rule_ids,
+        "uncertainties": [],
+        "requiresHumanReview": pending,
+    }
 
 
 def _first_evidence(context: AgentCaseContext, *statuses: str) -> list[str]:

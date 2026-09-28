@@ -1,5 +1,6 @@
 import type { CaseAnalysis, CaseSummary, DisputeCase } from "../types/dispute";
 import type { AdvocateRunResult } from "../types/advocate";
+import type { AuditEvent, DeterministicResolution, JudgeResult } from "../types/judge";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -8,6 +9,20 @@ export class CaseApiError extends Error {
     super(message);
     this.name = "CaseApiError";
   }
+}
+
+/** The Stage 5 result: an advisory Judge block plus the authoritative block. */
+export interface ResolutionRunResult {
+  caseId: string;
+  disputeType: "route_deviation" | "no_show_charge";
+  rider: AdvocateRunResult["rider"];
+  driver: AdvocateRunResult["driver"];
+  agentRun: AdvocateRunResult["agentRun"];
+  verificationSummary: AdvocateRunResult["verificationSummary"];
+  judge: JudgeResult;
+  deterministicResolution: DeterministicResolution;
+  pipeline: AdvocateRunResult["pipeline"];
+  audit: AuditEvent[];
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -42,6 +57,19 @@ export const caseService = {
    */
   runAdvocates(id: string): Promise<AdvocateRunResult> {
     return request<AdvocateRunResult>(`/api/cases/${encodeURIComponent(id)}/advocates/run`, {
+      method: "POST"
+    });
+  },
+
+  /**
+   * Run the full Stage 5 pipeline: advocates, verification, Judge, remedy.
+   *
+   * Kept separate from runAdvocates so the Stage 4 endpoint and its response
+   * contract are untouched. This returns both halves of the result: the Judge's
+   * advisory recommendation and the authoritative deterministic resolution.
+   */
+  runResolution(id: string): Promise<ResolutionRunResult> {
+    return request<ResolutionRunResult>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
       method: "POST"
     });
   }
