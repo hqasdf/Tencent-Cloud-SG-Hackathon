@@ -1,0 +1,46 @@
+[
+  {
+    "seq": 1,
+    "stage": "RIDER_ADVOCATE",
+    "method": "POST",
+    "endpoint": "generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "status": 503,
+    "errorType": null,
+    "durationMs": 3275,
+    "retryAfter": null,
+    "at": "2026-09-29T15:25:07.727275+00:00"
+  },
+  {
+    "seq": 2,
+    "stage": "RIDER_ADVOCATE",
+    "method": "POST",
+    "endpoint": "generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "status": 503,
+    "errorType": null,
+    "durationMs": 1884,
+    "retryAfter": null,
+    "at": "2026-09-29T15:25:10.648696+00:00"
+  },
+  {
+    "seq": 3,
+    "stage": "DRIVER_ADVOCATE",
+    "method": "POST",
+    "endpoint": "generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "status": 503,
+    "errorType": null,
+    "durationMs": 1111,
+    "retryAfter": null,
+    "at": "2026-09-29T15:25:11.794385+00:00"
+  },
+  {
+    "seq": 4,
+    "stage": "DRIVER_ADVOCATE",
+    "method": "POST",
+    "endpoint": "generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    "status": 503,
+    "errorType": null,
+    "durationMs": 1985,
+    "retryAfter": null,
+    "at": "2026-09-29T15:25:14.813478+00:00"
+  }
+]

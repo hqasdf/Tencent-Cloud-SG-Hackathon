@@ -18,9 +18,9 @@ assertion that failed a deterministic check and is preserved for audit.
 
 from __future__ import annotations
 
-import re
-
 from app.agents.judge_claims import known_claim_ids, namespace_claim_id, split_claim_id
+from app.agents.monetary import invented_monetary_amounts
+from app.agents.rebuttal_ids import known_rebuttal_ids, split_rebuttal_id
 from app.models.judge import (
     JUDGE_ALLOWED_OUTCOMES,
     JudgeCaseContext,
@@ -43,19 +43,9 @@ UNKNOWN_POLICY_RULE_ID = "UNKNOWN_POLICY_RULE_ID"
 EMPTY_REASONING_SUMMARY = "EMPTY_REASONING_SUMMARY"
 MISSING_CLAIM_CITATIONS = "MISSING_CLAIM_CITATIONS"
 INVENTED_MONETARY_VALUE = "INVENTED_MONETARY_VALUE"
-
-# Currency tokens and amounts, used to detect a monetary figure in prose. The
-# Judge has no amount field, so prose is the only route left for one to appear.
-_CURRENCY = r"(?:SGD|USD|MYR|IDR|THB|PHP|VND|CNY|RMB|EUR|GBP|S\$|US\$|HK\$|A\$|[$€£¥])"
-_AMOUNT = r"\d+(?:[.,]\d+)?"
-_MONEY_PATTERNS = (
-    re.compile(rf"{_CURRENCY}\s*({_AMOUNT})", re.IGNORECASE),
-    re.compile(rf"({_AMOUNT})\s*{_CURRENCY}", re.IGNORECASE),
-)
-
-# Amounts are compared after rounding to cents; a Judge quoting a supplied fact
-# should not fail on float representation.
-_MONEY_TOLERANCE = 0.005
+UNKNOWN_REBUTTAL_ID = "UNKNOWN_REBUTTAL_ID"
+REBUTTAL_ID_BELONGS_TO_OTHER_SIDE = "REBUTTAL_ID_BELONGS_TO_OTHER_SIDE"
+DUPLICATE_REBUTTAL_ID = "DUPLICATE_REBUTTAL_ID"
 
 
 class JudgeOutputValidationService:
@@ -66,6 +56,7 @@ class JudgeOutputValidationService:
 
         self._check_outcome(output, context, issues)
         self._check_claims(output, context, issues)
+        self._check_rebuttals(output, context, issues)
         self._check_evidence(output, context, issues)
         self._check_policy(output, context, issues)
         self._check_reasoning(output, context, issues)
@@ -208,6 +199,78 @@ class JudgeOutputValidationService:
                 )
             )
 
+    # -- rebuttals --------------------------------------------------------
+
+    @staticmethod
+    def _check_rebuttals(
+        output: JudgeOutput, context: JudgeCaseContext, issues: list[JudgeValidationIssue]
+    ) -> None:
+        """Every cited rebuttal must be a verified rebuttal on the right side.
+
+        The lists are optional, so a Judge that cites no rebuttal at all is valid:
+        reaching a conclusion without relying on cross-examination is a legitimate
+        outcome, not a failure to engage.
+
+        A rejected rebuttal cannot be cited because it is not in the context, so
+        it resolves to ``UNKNOWN_REBUTTAL_ID`` — the same code an invented ID
+        gets. That is intentional and matches the claim-side design: a rejected
+        argument and a non-existent one are equally unusable, and the detail
+        explains which check failed rather than implying the model invented it.
+        """
+        known = known_rebuttal_ids(
+            context.verified_rider_rebuttals, context.verified_driver_rebuttals
+        )
+        lists = {
+            "consideredRiderRebuttalIds": (
+                output.considered_rider_rebuttal_ids,
+                "RIDER",
+            ),
+            "consideredDriverRebuttalIds": (
+                output.considered_driver_rebuttal_ids,
+                "DRIVER",
+            ),
+        }
+
+        for field, (ids, expected) in lists.items():
+            seen: set[str] = set()
+            for reference in ids:
+                owner, _ = split_rebuttal_id(reference)
+                if owner is not None and owner != expected:
+                    issues.append(
+                        JudgeValidationIssue(
+                            code=REBUTTAL_ID_BELONGS_TO_OTHER_SIDE,
+                            detail=(
+                                f"{reference} is a {owner} rebuttal but was cited in "
+                                f"{field}."
+                            ),
+                        )
+                    )
+                    continue
+
+                if reference in seen:
+                    issues.append(
+                        JudgeValidationIssue(
+                            code=DUPLICATE_REBUTTAL_ID,
+                            detail=(
+                                f"Rebuttal {reference} is listed more than once in "
+                                f"{field}."
+                            ),
+                        )
+                    )
+                seen.add(reference)
+
+                if reference not in known:
+                    issues.append(
+                        JudgeValidationIssue(
+                            code=UNKNOWN_REBUTTAL_ID,
+                            detail=(
+                                f"{reference} is not a verified rebuttal in this case. "
+                                "Only rebuttals that passed deterministic verification "
+                                "may be cited."
+                            ),
+                        )
+                    )
+
     # -- evidence ---------------------------------------------------------
 
     @staticmethod
@@ -277,62 +340,24 @@ class JudgeOutputValidationService:
                 )
             )
 
-        trusted = _trusted_numeric_values(context)
-        for amount in _monetary_amounts(summary):
-            if not any(abs(amount - value) <= _MONEY_TOLERANCE for value in trusted):
-                issues.append(
-                    JudgeValidationIssue(
-                        code=INVENTED_MONETARY_VALUE,
-                        detail=(
-                            f"The reasoning states the monetary amount {amount:g}, which is "
-                            "not a value supplied in the trusted facts. The Judge must not "
-                            "state an amount; the refund engine calculates it."
-                        ),
-                    )
+        for amount in invented_monetary_amounts(summary, context.deterministic_facts):
+            issues.append(
+                JudgeValidationIssue(
+                    code=INVENTED_MONETARY_VALUE,
+                    detail=(
+                        f"The reasoning states the monetary amount {amount:g}, which is "
+                        "not a value supplied in the trusted facts. The Judge must not "
+                        "state an amount; the refund engine calculates it."
+                    ),
                 )
-
-
-def _monetary_amounts(text: str) -> list[float]:
-    amounts: list[float] = []
-    for pattern in _MONEY_PATTERNS:
-        for match in pattern.finditer(text):
-            raw = match.group(1).replace(",", "")
-            try:
-                amounts.append(float(raw))
-            except ValueError:
-                continue
-    return amounts
-
-
-def _trusted_numeric_values(context: JudgeCaseContext) -> list[float]:
-    """Every numeric value the deterministic layer supplied.
-
-    A Judge quoting ``fareDifference`` is repeating a fact it was given, which is
-    allowed. A Judge stating a figure that appears nowhere in the facts has
-    produced a number from nowhere, which is the failure this guards against.
-    """
-    values: list[float] = []
-
-    def collect(node: object) -> None:
-        if isinstance(node, bool):
-            return
-        if isinstance(node, (int, float)):
-            values.append(float(node))
-        elif isinstance(node, dict):
-            for item in node.values():
-                collect(item)
-        elif isinstance(node, (list, tuple)):
-            for item in node:
-                collect(item)
-
-    collect(context.deterministic_facts.model_dump())
-    return values
+            )
 
 
 __all__ = [
     "CLAIM_BOTH_ACCEPTED_AND_REJECTED",
     "CLAIM_ID_BELONGS_TO_OTHER_SIDE",
     "DUPLICATE_CLAIM_ID",
+    "DUPLICATE_REBUTTAL_ID",
     "EMPTY_REASONING_SUMMARY",
     "HUMAN_REVIEW_FLAG_INCONSISTENT",
     "HUMAN_REVIEW_OVERRIDE_ATTEMPTED",
@@ -340,7 +365,9 @@ __all__ = [
     "JudgeOutputValidationService",
     "MISSING_CLAIM_CITATIONS",
     "OUTCOME_NOT_ALLOWED_FOR_DISPUTE",
+    "REBUTTAL_ID_BELONGS_TO_OTHER_SIDE",
     "UNKNOWN_CLAIM_ID",
     "UNKNOWN_EVIDENCE_ID",
     "UNKNOWN_POLICY_RULE_ID",
+    "UNKNOWN_REBUTTAL_ID",
 ]

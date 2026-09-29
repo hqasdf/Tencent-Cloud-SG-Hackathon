@@ -6,13 +6,26 @@ dist/
 *.tsbuildinfo
 __pycache__/
 .pytest_cache/
+# pytest basetemp. Held here rather than under %TEMP% because the sandbox's
+# bulk-delete guard refuses to clean the system temp root.
+.pytest-tmp/
 .venv/
 .playwright-cli/
+# Local screenshots taken while reviewing UI changes.
+.ui-shots/
 backend/intake.db
 backend/*.db
 # Stage 4C raw benchmark output. Local by nature and full of run-specific
 # timings; a curated report can be committed separately if the hackathon needs one.
 backend/benchmark_results/
+# Stage 6B replay artefacts. Derived from a live run against a specific
+# deterministic case state, so they go stale the moment a fixture moves — and a
+# committed stale artefact would fail validation at the worst possible time.
+# Re-capture with: python -m app.replay.cli capture --case <id> --stage all --execute
+backend/replay_artifacts/
+# backend/demo_replays/ is deliberately NOT ignored: it is the read-only slot for
+# a curated synthetic artefact that would be committed on purpose, after review.
+# Nothing in the codebase writes there.
 _b64_*.txt
 _gen*.py
 _gen*.ps1

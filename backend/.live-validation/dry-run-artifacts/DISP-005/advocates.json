@@ -1,0 +1,144 @@
+{
+  "caseId": "DISP-005",
+  "createdAt": "2026-09-29T15:23:04.800899+00:00",
+  "deterministicAnalysisHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+  "disputeType": "route_deviation",
+  "model": "gemini-3.8-flash",
+  "payload": {
+    "driver": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "D1"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "EXPLAINED_DEVIATION_KM",
+                "value": 3.2
+              }
+            ],
+            "claim": "Verified route conditions explain 3.2 km of the 3.2 km deviation.",
+            "claimId": "D1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E06"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "Only conditions backed by verified evidence reduce the explained deviation."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "NO_REFUND",
+        "side": "DRIVER",
+        "summary": "The driver relies on 1 verified route condition(s) covering part of the deviation."
+      },
+      "side": "DRIVER"
+    },
+    "rider": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "R1",
+          "R3"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 2,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 2
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "DEVIATION_PERCENTAGE",
+                "value": 27.83
+              },
+              {
+                "fact": "DISTANCE_DIFFERENCE_KM",
+                "value": 3.2
+              }
+            ],
+            "claim": "The actual route was 14.7 km against an expected 11.5 km, a 27.83% deviation.",
+            "claimId": "R1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "The measured distance difference is a trusted calculation and is not covered in full by verified route conditions."
+          },
+          {
+            "assertedFacts": [
+              {
+                "fact": "EXPLAINED_DEVIATION_KM",
+                "value": 3.2
+              }
+            ],
+            "claim": "3.2 km of the deviation is explained by verified conditions, which weakens part of the rider's position.",
+            "claimId": "R3",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "importance": "MEDIUM",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "Adverse fact acknowledged rather than concealed."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "NO_REFUND",
+        "side": "RIDER",
+        "summary": "The rider cannot rely on unexplained deviation: verified conditions account for the route."
+      },
+      "side": "RIDER"
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage4-v1",
+  "stage": "ADVOCATES",
+  "trustedContextHash": "174590ce48b9c9db6625616f9ed796455048de73d341d39e85a1969e3cb81dd6"
+}

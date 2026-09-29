@@ -34,6 +34,47 @@ JUDGE_OUTPUT_REJECTED = "JUDGE_OUTPUT_REJECTED"
 JUDGE_NOT_RUN = "JUDGE_NOT_RUN"
 PENDING_HUMAN_REVIEW = "PENDING_HUMAN_REVIEW"
 
+# Stage 6. The rebuttal events are per-side rather than a single pair, because
+# the two rebuttals fail independently: one side failing while the other succeeds
+# is a normal outcome that the trail has to be able to express.
+REBUTTAL_CONTEXT_BUILT = "REBUTTAL_CONTEXT_BUILT"
+RIDER_REBUTTAL_STARTED = "RIDER_REBUTTAL_STARTED"
+RIDER_REBUTTAL_COMPLETED = "RIDER_REBUTTAL_COMPLETED"
+RIDER_REBUTTAL_FAILED = "RIDER_REBUTTAL_FAILED"
+DRIVER_REBUTTAL_STARTED = "DRIVER_REBUTTAL_STARTED"
+DRIVER_REBUTTAL_COMPLETED = "DRIVER_REBUTTAL_COMPLETED"
+DRIVER_REBUTTAL_FAILED = "DRIVER_REBUTTAL_FAILED"
+REBUTTAL_VERIFIED = "REBUTTAL_VERIFIED"
+REBUTTAL_REJECTED = "REBUTTAL_REJECTED"
+REBUTTALS_NOT_RUN = "REBUTTALS_NOT_RUN"
+
+# Which start/complete/fail events belong to which side, so the orchestrator can
+# look them up rather than branching on the side at every call site.
+SIDE_EVENTS: dict[str, tuple[str, str, str]] = {
+    "RIDER": (RIDER_REBUTTAL_STARTED, RIDER_REBUTTAL_COMPLETED, RIDER_REBUTTAL_FAILED),
+    "DRIVER": (DRIVER_REBUTTAL_STARTED, DRIVER_REBUTTAL_COMPLETED, DRIVER_REBUTTAL_FAILED),
+}
+
+# Stage 6B. Replay events are recorded for both directions — a capture and a
+# replayed load — because the trail has to be able to answer "was this run
+# served from storage, and was it written to storage?" after the fact.
+#
+# REPLAY_FALLBACK_BLOCKED is the one that matters most. It is recorded when a
+# requested replay is refused, and it exists to make the absence of a provider
+# call explicit rather than merely true. A future change that quietly added a
+# fallback would leave this event missing, which is a far easier thing to notice
+# than a call count that is one higher than expected.
+REPLAY_REQUESTED = "REPLAY_REQUESTED"
+REPLAY_ARTIFACT_LOADED = "REPLAY_ARTIFACT_LOADED"
+REPLAY_ARTIFACT_WRITTEN = "REPLAY_ARTIFACT_WRITTEN"
+REPLAY_VALIDATION_STARTED = "REPLAY_VALIDATION_STARTED"
+REPLAY_VALID = "REPLAY_VALID"
+REPLAY_INVALID = "REPLAY_INVALID"
+ADVOCATES_REPLAYED = "ADVOCATES_REPLAYED"
+REBUTTALS_REPLAYED = "REBUTTALS_REPLAYED"
+JUDGE_REPLAYED = "JUDGE_REPLAYED"
+REPLAY_FALLBACK_BLOCKED = "REPLAY_FALLBACK_BLOCKED"
+
 # Keys that must never reach the trail. Checked rather than assumed, because
 # "we did not log the key" is exactly the kind of claim that decays silently.
 _FORBIDDEN_METADATA_KEYS = frozenset(
@@ -84,13 +125,34 @@ class AuditTrail:
 
 
 __all__ = [
+    "ADVOCATES_REPLAYED",
     "AuditTrail",
+    "DRIVER_REBUTTAL_COMPLETED",
+    "DRIVER_REBUTTAL_FAILED",
+    "DRIVER_REBUTTAL_STARTED",
     "JUDGE_COMPLETED",
     "JUDGE_CONTEXT_BUILT",
     "JUDGE_FAILED",
     "JUDGE_NOT_RUN",
     "JUDGE_OUTPUT_REJECTED",
     "JUDGE_OUTPUT_VALIDATED",
+    "JUDGE_REPLAYED",
     "JUDGE_STARTED",
     "PENDING_HUMAN_REVIEW",
+    "REBUTTALS_NOT_RUN",
+    "REBUTTALS_REPLAYED",
+    "REBUTTAL_CONTEXT_BUILT",
+    "REBUTTAL_REJECTED",
+    "REBUTTAL_VERIFIED",
+    "REPLAY_ARTIFACT_LOADED",
+    "REPLAY_ARTIFACT_WRITTEN",
+    "REPLAY_FALLBACK_BLOCKED",
+    "REPLAY_INVALID",
+    "REPLAY_REQUESTED",
+    "REPLAY_VALID",
+    "REPLAY_VALIDATION_STARTED",
+    "RIDER_REBUTTAL_COMPLETED",
+    "RIDER_REBUTTAL_FAILED",
+    "RIDER_REBUTTAL_STARTED",
+    "SIDE_EVENTS",
 ]

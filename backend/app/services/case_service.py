@@ -4,6 +4,7 @@ from app.models.advocate import AdvocateRunResponse
 from app.models.analysis import CaseAnalysisResponse
 from app.models.case import CaseMetadata, CaseSummary, ConfidenceBreakdown, DisputeCase, PolicyResult, Resolution
 from app.models.judge import CaseResolutionResponse
+from app.models.replay import NO_REPLAY, ReplayMode
 from app.repositories.case_repository import CaseRepository
 from app.services.case_replay import CaseReplayService
 from app.services.dispute_analysis import DisputeAnalysisService
@@ -66,19 +67,26 @@ class CaseService:
         orchestrator = AdvocateOrchestratorService()
         return orchestrator.run(case, analysis)
 
-    def get_resolution_run(self, case_id: str) -> CaseResolutionResponse:
-        """Run the full Stage 5 pipeline: advocates, verification, Judge, remedy.
+    def get_resolution_run(
+        self, case_id: str, replay_mode: ReplayMode = NO_REPLAY
+    ) -> CaseResolutionResponse:
+        """Run the full Stage 6 pipeline: advocates, rebuttals, Judge, remedy.
 
         Kept separate from ``get_advocate_run`` so the Stage 4 endpoint's response
         contract is untouched. The deterministic analysis is computed once here
         and passed read-only to the orchestrator, exactly as in Stage 4.
+
+        ``replay_mode`` defaults to ``NONE``, so every existing caller keeps the
+        live behaviour. A replayed run raises ``ReplayRefused`` rather than
+        falling back to a provider call, and it does **not** change the
+        deterministic analysis computed here — that is always live.
         """
         from app.services.resolution_orchestrator import ResolutionOrchestratorService
 
         case = self._load_case(case_id)
         analysis = self._analysis_service.analyze(case)
         orchestrator = ResolutionOrchestratorService()
-        return orchestrator.run(case, analysis)
+        return orchestrator.run(case, analysis, replay_mode=replay_mode)
 
     def _load_case(self, case_id: str) -> DisputeCase:
         case = self._repository.get_case(case_id)

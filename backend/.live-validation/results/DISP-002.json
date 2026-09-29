@@ -1,0 +1,538 @@
+{
+  "caseId": "DISP-002",
+  "label": "no-show",
+  "disputeType": "no_show_charge",
+  "runAt": "2026-09-29T15:23:04.828307+00:00",
+  "wallClockMs": 10,
+  "httpAttemptsThisCase": 0,
+  "httpAttemptsByStage": {},
+  "error": null,
+  "baselineHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+  "baselineContextHash": "a808a5b2033bb21bc7b7527023b2683272f1eda78f9ec3b2f5c7ce32dc7379bc",
+  "baselineDeterministic": {
+    "facts": {
+      "analysisType": "no_show_charge",
+      "driverDistanceToPickupMeters": 0.0,
+      "driverWithinPickupRadius": true,
+      "driverArrivalTimestamp": "08:43:00",
+      "cancellationTimestamp": "08:51:00",
+      "waitingDurationSeconds": 480,
+      "riderMessageEvidenceIds": [],
+      "driverMessageEvidenceIds": [
+        "E04"
+      ],
+      "cancellationChargeAmount": 5.0,
+      "requiredEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "missingEvidenceIds": [],
+      "contradictoryEvidence": false,
+      "supportingEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ]
+    },
+    "policyEvaluation": {
+      "policyId": "NO_SHOW_POLICY_V1",
+      "policyVersion": "1.0.0-prototype",
+      "evaluatedRules": [
+        {
+          "ruleId": "NO_SHOW_REQUIRED_EVIDENCE",
+          "description": "Arrival, waiting, and cancellation evidence must be present.",
+          "passed": true,
+          "actualValue": 4,
+          "requiredValue": 4,
+          "evidenceIds": [
+            "E02",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_PICKUP_RADIUS",
+          "description": "Driver must arrive within the configured prototype pickup radius.",
+          "passed": true,
+          "actualValue": 0.0,
+          "requiredValue": 100.0,
+          "evidenceIds": [
+            "E02"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_WAIT_TIME",
+          "description": "Driver must wait at least the configured prototype threshold.",
+          "passed": true,
+          "actualValue": 480,
+          "requiredValue": 300,
+          "evidenceIds": [
+            "E04",
+            "E07"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_EVIDENCE_CONSISTENCY",
+          "description": "Critical GPS and timestamp evidence must not conflict.",
+          "passed": true,
+          "actualValue": false,
+          "requiredValue": false,
+          "evidenceIds": [
+            "E02",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        }
+      ],
+      "passedRules": [
+        "NO_SHOW_REQUIRED_EVIDENCE",
+        "NO_SHOW_PICKUP_RADIUS",
+        "NO_SHOW_WAIT_TIME",
+        "NO_SHOW_EVIDENCE_CONSISTENCY"
+      ],
+      "failedRules": [],
+      "supportingEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "overallOutcome": "UPHOLD_CANCELLATION_CHARGE"
+    },
+    "ruling": "Cancellation charge upheld",
+    "recommendedAction": "UPHOLD_CANCELLATION_CHARGE",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "confidence": 0.95,
+    "resolutionMode": "AUTO_RESOLVE",
+    "escalationReasons": []
+  },
+  "stageAttempts": {},
+  "afterHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+  "afterDeterministic": {
+    "facts": {
+      "analysisType": "no_show_charge",
+      "driverDistanceToPickupMeters": 0.0,
+      "driverWithinPickupRadius": true,
+      "driverArrivalTimestamp": "08:43:00",
+      "cancellationTimestamp": "08:51:00",
+      "waitingDurationSeconds": 480,
+      "riderMessageEvidenceIds": [],
+      "driverMessageEvidenceIds": [
+        "E04"
+      ],
+      "cancellationChargeAmount": 5.0,
+      "requiredEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "missingEvidenceIds": [],
+      "contradictoryEvidence": false,
+      "supportingEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ]
+    },
+    "policyEvaluation": {
+      "policyId": "NO_SHOW_POLICY_V1",
+      "policyVersion": "1.0.0-prototype",
+      "evaluatedRules": [
+        {
+          "ruleId": "NO_SHOW_REQUIRED_EVIDENCE",
+          "description": "Arrival, waiting, and cancellation evidence must be present.",
+          "passed": true,
+          "actualValue": 4,
+          "requiredValue": 4,
+          "evidenceIds": [
+            "E02",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_PICKUP_RADIUS",
+          "description": "Driver must arrive within the configured prototype pickup radius.",
+          "passed": true,
+          "actualValue": 0.0,
+          "requiredValue": 100.0,
+          "evidenceIds": [
+            "E02"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_WAIT_TIME",
+          "description": "Driver must wait at least the configured prototype threshold.",
+          "passed": true,
+          "actualValue": 480,
+          "requiredValue": 300,
+          "evidenceIds": [
+            "E04",
+            "E07"
+          ]
+        },
+        {
+          "ruleId": "NO_SHOW_EVIDENCE_CONSISTENCY",
+          "description": "Critical GPS and timestamp evidence must not conflict.",
+          "passed": true,
+          "actualValue": false,
+          "requiredValue": false,
+          "evidenceIds": [
+            "E02",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        }
+      ],
+      "passedRules": [
+        "NO_SHOW_REQUIRED_EVIDENCE",
+        "NO_SHOW_PICKUP_RADIUS",
+        "NO_SHOW_WAIT_TIME",
+        "NO_SHOW_EVIDENCE_CONSISTENCY"
+      ],
+      "failedRules": [],
+      "supportingEvidenceIds": [
+        "E02",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "overallOutcome": "UPHOLD_CANCELLATION_CHARGE"
+    },
+    "ruling": "Cancellation charge upheld",
+    "recommendedAction": "UPHOLD_CANCELLATION_CHARGE",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "confidence": 0.95,
+    "resolutionMode": "AUTO_RESOLVE",
+    "escalationReasons": []
+  },
+  "deterministicUnchanged": true,
+  "caseFixtureUnchanged": true,
+  "deterministicChanges": {},
+  "pipeline": [
+    {
+      "stage": "CASE_RECEIVED",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "EVIDENCE_VALIDATED",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "DETERMINISTIC_ANALYSIS",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "RIDER_ADVOCATE",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "DRIVER_ADVOCATE",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "CLAIM_VERIFICATION",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "RIDER_REBUTTAL",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "DRIVER_REBUTTAL",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "REBUTTAL_VERIFICATION",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "JUDGE",
+      "status": "COMPLETE"
+    }
+  ],
+  "replayMetadata": {
+    "mode": "NONE",
+    "replayed": false,
+    "advocatesReplayed": false,
+    "rebuttalsReplayed": false,
+    "judgeReplayed": false,
+    "valid": true,
+    "reasonCodes": [],
+    "currentAnalysisHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+    "artifactAnalysisHash": null,
+    "artifactCreatedAt": null,
+    "artifactVersion": null,
+    "capturedProvider": null,
+    "capturedModel": null,
+    "note": "All AI stages ran against the configured provider in this request."
+  },
+  "auditEvents": [
+    "REPLAY_ARTIFACT_WRITTEN",
+    "REBUTTAL_CONTEXT_BUILT",
+    "RIDER_REBUTTAL_STARTED",
+    "RIDER_REBUTTAL_COMPLETED",
+    "REBUTTAL_VERIFIED",
+    "REBUTTAL_CONTEXT_BUILT",
+    "DRIVER_REBUTTAL_STARTED",
+    "DRIVER_REBUTTAL_COMPLETED",
+    "REBUTTAL_VERIFIED",
+    "REPLAY_ARTIFACT_WRITTEN",
+    "JUDGE_CONTEXT_BUILT",
+    "JUDGE_STARTED",
+    "JUDGE_COMPLETED",
+    "JUDGE_OUTPUT_VALIDATED",
+    "REPLAY_ARTIFACT_WRITTEN"
+  ],
+  "stages": {
+    "RIDER_ADVOCATE": {
+      "status": "COMPLETE",
+      "provider": "mock",
+      "model": null,
+      "latencyMs": 0,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "generatedClaimCount": 1,
+      "verifiedClaimCount": 1,
+      "rejectedClaimCount": 0,
+      "verificationRate": 1.0,
+      "rejectionReasons": [],
+      "malformedOutput": false,
+      "failureCode": null,
+      "failureReason": null,
+      "structuredOutputValid": true,
+      "requestedOutcome": "UPHOLD_CHARGE",
+      "contextAcknowledged": true,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "warnings": [],
+      "rejectedClaims": [],
+      "verifiedClaimIds": [
+        "R1"
+      ]
+    },
+    "DRIVER_ADVOCATE": {
+      "status": "COMPLETE",
+      "provider": "mock",
+      "model": null,
+      "latencyMs": 0,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "generatedClaimCount": 1,
+      "verifiedClaimCount": 1,
+      "rejectedClaimCount": 0,
+      "verificationRate": 1.0,
+      "rejectionReasons": [],
+      "malformedOutput": false,
+      "failureCode": null,
+      "failureReason": null,
+      "structuredOutputValid": true,
+      "requestedOutcome": "UPHOLD_CHARGE",
+      "contextAcknowledged": true,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "warnings": [],
+      "rejectedClaims": [],
+      "verifiedClaimIds": [
+        "D1"
+      ]
+    },
+    "RIDER_REBUTTAL": {
+      "status": "COMPLETE",
+      "provider": "mock",
+      "model": null,
+      "latencyMs": 0,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "responsesGenerated": 1,
+      "responsesVerified": 1,
+      "responsesRejected": 0,
+      "verificationRate": 1.0,
+      "stances": {
+        "CHALLENGE": 1
+      },
+      "targetClaimIds": [
+        "DRIVER-D1"
+      ],
+      "verifiedRebuttalIds": [
+        "RIDER-RB1"
+      ],
+      "rejectionReasons": [],
+      "rejected": [],
+      "invalidTargetIds": 0,
+      "ownSideTargets": 0,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "inventedMonetaryValues": 0,
+      "concededTargetIds": [],
+      "failureReason": null,
+      "structuredOutputValid": true
+    },
+    "DRIVER_REBUTTAL": {
+      "status": "COMPLETE",
+      "provider": "mock",
+      "model": null,
+      "latencyMs": 0,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "responsesGenerated": 1,
+      "responsesVerified": 1,
+      "responsesRejected": 0,
+      "verificationRate": 1.0,
+      "stances": {
+        "CHALLENGE": 1
+      },
+      "targetClaimIds": [
+        "RIDER-R1"
+      ],
+      "verifiedRebuttalIds": [
+        "DRIVER-RB1"
+      ],
+      "rejectionReasons": [],
+      "rejected": [],
+      "invalidTargetIds": 0,
+      "ownSideTargets": 0,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "inventedMonetaryValues": 0,
+      "concededTargetIds": [],
+      "failureReason": null,
+      "structuredOutputValid": true
+    },
+    "JUDGE": {
+      "status": "COMPLETE",
+      "executable": true,
+      "skipReason": null,
+      "recommendedOutcome": "UPHOLD_CANCELLATION_CHARGE",
+      "provider": "mock",
+      "model": null,
+      "latencyMs": 0,
+      "attemptCount": 1,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "acceptedRiderClaimIds": [
+        "RIDER-R1"
+      ],
+      "acceptedDriverClaimIds": [
+        "DRIVER-D1"
+      ],
+      "rejectedRiderClaimIds": [],
+      "rejectedDriverClaimIds": [],
+      "consideredRiderRebuttalIds": [
+        "RIDER-RB1"
+      ],
+      "consideredDriverRebuttalIds": [
+        "DRIVER-RB1"
+      ],
+      "evidenceIds": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "policyRuleIds": [
+        "NO_SHOW_REQUIRED_EVIDENCE",
+        "NO_SHOW_PICKUP_RADIUS",
+        "NO_SHOW_WAIT_TIME",
+        "NO_SHOW_EVIDENCE_CONSISTENCY"
+      ],
+      "reasoningSummary": "The driver was recorded inside the pickup radius and the recorded waiting duration is above the policy threshold, so the charge is supported by the record.",
+      "uncertainties": [],
+      "requiresHumanReview": false,
+      "failureReason": null,
+      "validationResult": "VALID",
+      "validationIssues": [],
+      "failureCode": null,
+      "failureCategory": null
+    }
+  },
+  "deterministicResolution": {
+    "ruling": "Cancellation charge upheld",
+    "recommendedAction": "UPHOLD_CANCELLATION_CHARGE",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "resolutionMode": "AUTO_RESOLVE",
+    "confidence": 0.95,
+    "escalationReasons": [],
+    "explanation": "The driver arrived within the configured pickup radius and waited at least the prototype threshold.",
+    "counterfactualExplanation": "A distance outside the pickup radius or a verified wait below the threshold would refund the cancellation charge."
+  },
+  "authoritativeMatchesBaseline": true,
+  "trustBoundaries": {
+    "rejectedClaimsExcludedFromContext": true,
+    "rejectedClaimIds": [],
+    "contextClaimIds": [
+      "DRIVER-D1",
+      "RIDER-R1"
+    ],
+    "contextHoldsExactlyVerifiedClaims": true,
+    "contextUnexpectedClaimIds": [],
+    "contextMissingClaimIds": [],
+    "rejectedRebuttalsExcludedFromContext": true,
+    "contextHoldsExactlyVerifiedRebuttals": true,
+    "judgeCitedOnlyVerifiedClaims": true,
+    "judgeCitedUnknownClaimIds": [],
+    "judgeCitedOnlyVerifiedRebuttals": true,
+    "judgeCitedUnknownRebuttalIds": [],
+    "judgeCitedOnlyValidEvidence": true,
+    "judgeCitedUnknownEvidenceIds": [],
+    "judgeCitedOnlyApplicablePolicy": true,
+    "judgeCitedUnknownPolicyIds": [],
+    "contextRiderVerifiedCount": 1,
+    "contextDriverVerifiedCount": 1,
+    "contextRiderRebuttalCount": 1,
+    "contextDriverRebuttalCount": 1,
+    "judgeContextTrustedHash": "79d23ba7364cc84be50e281737d24d5d4c346742e0561b0b8c61f5cb335a49e3"
+  },
+  "artifacts": {
+    "ADVOCATES": {
+      "written": false
+    },
+    "REBUTTALS": {
+      "written": false
+    },
+    "JUDGE": {
+      "written": false
+    }
+  }
+}

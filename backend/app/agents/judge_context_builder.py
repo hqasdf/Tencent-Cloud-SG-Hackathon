@@ -44,6 +44,7 @@ from app.models.agent import (
 )
 from app.models.case import DisputeCase
 from app.models.judge import JUDGE_ALLOWED_OUTCOMES, JudgeCaseContext, JudgeSideClaims
+from app.models.rebuttal import RebuttalRunResponse, VerifiedRebuttal
 from app.policies import NO_SHOW_POLICY_V1, ROUTE_DEVIATION_POLICY_V1
 
 
@@ -57,12 +58,17 @@ class JudgeContextBuilder:
         advocate_context: AgentCaseContext,
         rider: AdvocateSideResult,
         driver: AdvocateSideResult,
+        rebuttal_run: RebuttalRunResponse | None = None,
     ) -> JudgeCaseContext:
         """Assemble the Judge context from the case, its analysis and both sides.
 
         The advocate context is passed in rather than rebuilt so the Judge and
         the advocates are guaranteed to be looking at the same facts, evidence
         and policy. Rebuilding would create a second projection that could drift.
+
+        ``rebuttal_run`` is optional so a caller that has no rebuttal layer (a
+        Stage 5 replay, or a test of the Judge alone) still works. When it is
+        supplied, only *verified* rebuttals are projected — see ``_rebuttals``.
         """
         return JudgeCaseContext(
             case_id=case.id,
@@ -74,9 +80,27 @@ class JudgeContextBuilder:
             policy_evaluation=self._policy_evaluation(advocate_context, analysis),
             rider=self._side("RIDER", rider),
             driver=self._side("DRIVER", driver),
+            verified_rider_rebuttals=self._rebuttals(rebuttal_run, "RIDER"),
+            verified_driver_rebuttals=self._rebuttals(rebuttal_run, "DRIVER"),
             resolution_mode=analysis.resolution_mode,
             allowed_outcomes=sorted(JUDGE_ALLOWED_OUTCOMES[case.dispute_type]),
         )
+
+    @staticmethod
+    def _rebuttals(
+        rebuttal_run: RebuttalRunResponse | None, side: str
+    ) -> list[VerifiedRebuttal]:
+        """Project one side's VERIFIED rebuttals.
+
+        ``rejected_rebuttals`` is not read here at all — the same treatment
+        rejected claims get in ``_side``. A rejected rebuttal is an argument that
+        failed a deterministic check, so putting it in the prompt would invite the
+        Judge to weigh something code already refused to trust.
+        """
+        if rebuttal_run is None:
+            return []
+        result = rebuttal_run.rider if side == "RIDER" else rebuttal_run.driver
+        return list(result.verified_rebuttals)
 
     @staticmethod
     def _side(side: str, result: AdvocateSideResult) -> JudgeSideClaims:

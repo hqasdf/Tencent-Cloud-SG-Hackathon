@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass, field
 
 from app.agents.base_advocate import AdvocateAgentError, AdvocateOutputErrorCode
 from app.agents.claim_verification import AdvocateClaimVerificationService
@@ -11,6 +12,7 @@ from app.agents.provider import LlmProvider, LlmProviderError
 from app.agents.providers.registry import get_provider
 from app.agents.rider_advocate import RiderAdvocateAgent
 from app.models.advocate import (
+    AdvocateOutput,
     AdvocateRunResponse,
     AdvocateSideResult,
     PipelineStage,
@@ -32,6 +34,23 @@ _UNUSABLE_OUTPUT_CODES = frozenset(
         AdvocateOutputErrorCode.OUTPUT_TRUNCATED,
     }
 )
+
+
+@dataclass
+class AdvocateRunOutcome:
+    """A run's response plus the raw model output behind it.
+
+    ``run`` returns only ``response``, so the Stage 4 contract is untouched.
+    Stage 6B needs the raw output because a replay artefact must store what the
+    model said, not the verified/rejected split that was derived from it — see
+    ``app.replay.artifacts`` for why that distinction is load-bearing.
+
+    ``raw_outputs`` is keyed by side and holds nothing for a side that failed,
+    because a failed side produced no output to store.
+    """
+
+    response: AdvocateRunResponse
+    raw_outputs: dict[str, AdvocateOutput] = field(default_factory=dict)
 
 
 class AdvocateOrchestratorService:
@@ -68,11 +87,25 @@ class AdvocateOrchestratorService:
         analysis: CaseAnalysisResponse,
         context: AgentCaseContext | None = None,
     ) -> AdvocateRunResponse:
-        """Run both advocates.
+        """Run both advocates and return the Stage 4 response.
 
         ``context`` may be supplied by a caller that has already built it (Stage
         5 builds one projection and shares it with the Judge). It is optional so
         Stage 4 callers are unaffected, and it is never mutated.
+        """
+        return self.run_with_raw(case, analysis, context).response
+
+    def run_with_raw(
+        self,
+        case: DisputeCase,
+        analysis: CaseAnalysisResponse,
+        context: AgentCaseContext | None = None,
+    ) -> AdvocateRunOutcome:
+        """``run``, plus the raw model output for each side that produced one.
+
+        Identical in every observable respect to ``run``; the raw outputs are
+        carried alongside rather than inside the response, so no public contract
+        gains a field.
         """
         started = time.monotonic()
         pipeline: list[PipelineStage] = [
@@ -97,8 +130,12 @@ class AdvocateOrchestratorService:
         driver_agent = DriverAdvocateAgent(provider, self._settings)
 
         # 5-6. Independent execution. Neither agent sees the other's output.
-        rider_result = self._run_side(rider_agent, context, pipeline, "RIDER_ADVOCATE")
-        driver_result = self._run_side(driver_agent, context, pipeline, "DRIVER_ADVOCATE")
+        rider_result, rider_raw = self._run_side(
+            rider_agent, context, pipeline, "RIDER_ADVOCATE"
+        )
+        driver_result, driver_raw = self._run_side(
+            driver_agent, context, pipeline, "DRIVER_ADVOCATE"
+        )
 
         _mark(
             pipeline,
@@ -117,7 +154,7 @@ class AdvocateOrchestratorService:
             }
         )
 
-        return AdvocateRunResponse(
+        response = AdvocateRunResponse(
             case_id=case.id,
             dispute_type=case.dispute_type,
             rider=rider_result,
@@ -148,6 +185,12 @@ class AdvocateOrchestratorService:
             ),
             pipeline=pipeline,
         )
+        raw_outputs: dict[str, AdvocateOutput] = {}
+        if rider_raw is not None:
+            raw_outputs["RIDER"] = rider_raw
+        if driver_raw is not None:
+            raw_outputs["DRIVER"] = driver_raw
+        return AdvocateRunOutcome(response=response, raw_outputs=raw_outputs)
 
     def _run_side(
         self,
@@ -155,7 +198,7 @@ class AdvocateOrchestratorService:
         context: AgentCaseContext,
         pipeline: list[PipelineStage],
         stage: str,
-    ) -> AdvocateSideResult:
+    ) -> tuple[AdvocateSideResult, AdvocateOutput | None]:
         """Run one advocate in isolation. Failure never propagates outward."""
         side = agent.side
         started = time.monotonic()
@@ -163,48 +206,57 @@ class AdvocateOrchestratorService:
             argument = agent.argue_with_trace(context)
         except (LlmProviderError, AdvocateAgentError) as error:
             _mark(pipeline, stage, "FAILED")
-            return AdvocateSideResult(
-                side=side,
-                status="FAILED",
-                summary="",
-                failure_reason=_safe_failure_reason(error),
-                execution=self._failure_metadata(agent, error, started),
+            return (
+                AdvocateSideResult(
+                    side=side,
+                    status="FAILED",
+                    summary="",
+                    failure_reason=_safe_failure_reason(error),
+                    execution=self._failure_metadata(agent, error, started),
+                ),
+                None,
             )
         except Exception as error:  # noqa: BLE001 - isolation boundary
             _mark(pipeline, stage, "FAILED")
-            return AdvocateSideResult(
-                side=side,
-                status="FAILED",
-                summary="",
-                failure_reason=f"Advocate run failed: {type(error).__name__}",
-                execution=self._failure_metadata(agent, error, started),
+            return (
+                AdvocateSideResult(
+                    side=side,
+                    status="FAILED",
+                    summary="",
+                    failure_reason=f"Advocate run failed: {type(error).__name__}",
+                    execution=self._failure_metadata(agent, error, started),
+                ),
+                None,
             )
 
         outcome = self._verification.verify(argument.output, context)
         _mark(pipeline, stage, "COMPLETE")
         completion = argument.completion
-        return AdvocateSideResult(
-            side=side,
-            status="COMPLETE",
-            summary=argument.output.summary,
-            requested_outcome=argument.output.requested_outcome,
-            context_acknowledged=argument.output.context_acknowledged,
-            verified_claims=outcome.verified_claims,
-            rejected_claims=outcome.rejected_claims,
-            warnings=outcome.warnings,
-            execution=AgentCallMetadata(
-                provider=completion.provider_name,
-                model=completion.model_name,
-                duration_ms=completion.duration_ms,
-                input_tokens=completion.input_tokens,
-                output_tokens=completion.output_tokens,
-                total_tokens=completion.total_tokens,
-                generated_claim_count=len(argument.output.claims),
-                verified_claim_count=len(outcome.verified_claims),
-                rejected_claim_count=len(outcome.rejected_claims),
-                rejection_reasons=sorted({claim.reason for claim in outcome.rejected_claims}),
-                malformed_output=False,
+        return (
+            AdvocateSideResult(
+                side=side,
+                status="COMPLETE",
+                summary=argument.output.summary,
+                requested_outcome=argument.output.requested_outcome,
+                context_acknowledged=argument.output.context_acknowledged,
+                verified_claims=outcome.verified_claims,
+                rejected_claims=outcome.rejected_claims,
+                warnings=outcome.warnings,
+                execution=AgentCallMetadata(
+                    provider=completion.provider_name,
+                    model=completion.model_name,
+                    duration_ms=completion.duration_ms,
+                    input_tokens=completion.input_tokens,
+                    output_tokens=completion.output_tokens,
+                    total_tokens=completion.total_tokens,
+                    generated_claim_count=len(argument.output.claims),
+                    verified_claim_count=len(outcome.verified_claims),
+                    rejected_claim_count=len(outcome.rejected_claims),
+                    rejection_reasons=sorted({claim.reason for claim in outcome.rejected_claims}),
+                    malformed_output=False,
+                ),
             ),
+            argument.output,
         )
 
     def _failure_metadata(

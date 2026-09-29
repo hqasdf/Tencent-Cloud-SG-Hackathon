@@ -1,0 +1,65 @@
+{
+  "caseId": "DISP-003",
+  "createdAt": "2026-09-29T15:23:04.838628+00:00",
+  "deterministicAnalysisHash": "7fa746d5a531b748ecdcb1f1d0f43736f2b3deb93eb6ac707b245b834551068b",
+  "disputeType": "route_deviation",
+  "model": null,
+  "payload": {
+    "execution": {
+      "durationMs": 0,
+      "failureCode": null,
+      "generatedClaimCount": 0,
+      "inputTokens": null,
+      "malformedOutput": false,
+      "model": null,
+      "outputTokens": null,
+      "provider": "mock",
+      "rejectedClaimCount": 0,
+      "rejectionReasons": [],
+      "totalTokens": null,
+      "verifiedClaimCount": 0
+    },
+    "output": {
+      "acceptedDriverClaimIds": [
+        "DRIVER-D1",
+        "DRIVER-D2"
+      ],
+      "acceptedRiderClaimIds": [
+        "RIDER-R1",
+        "RIDER-R2"
+      ],
+      "consideredDriverRebuttalIds": [
+        "DRIVER-RB1",
+        "DRIVER-RB2"
+      ],
+      "consideredRiderRebuttalIds": [
+        "RIDER-RB1",
+        "RIDER-RB2"
+      ],
+      "evidenceIds": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05"
+      ],
+      "policyRuleIds": [
+        "ROUTE_REQUIRED_EVIDENCE",
+        "ROUTE_UNEXPLAINED_DEVIATION",
+        "ROUTE_EVIDENCE_CONSISTENCY"
+      ],
+      "reasoningSummary": "The measured deviation is 47.25% and 8.6 km of it has no verified explanation in the record, so an adjustment is supported by the facts. A deterministic gate requires human review, so this is an advisory summary and not an executable outcome.",
+      "recommendedOutcome": "PARTIAL_REFUND",
+      "rejectedDriverClaimIds": [],
+      "rejectedRiderClaimIds": [],
+      "requiresHumanReview": true,
+      "status": "PENDING_HUMAN_REVIEW",
+      "uncertainties": []
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage5-v1",
+  "stage": "JUDGE",
+  "trustedContextHash": "331b55d9e251d6464643de9edcbe32f2eb1c3330298a805aa379991a1c89ffe9"
+}

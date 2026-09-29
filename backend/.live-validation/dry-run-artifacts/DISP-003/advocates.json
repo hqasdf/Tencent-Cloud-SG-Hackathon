@@ -1,0 +1,166 @@
+{
+  "caseId": "DISP-003",
+  "createdAt": "2026-09-29T15:23:04.832430+00:00",
+  "deterministicAnalysisHash": "7fa746d5a531b748ecdcb1f1d0f43736f2b3deb93eb6ac707b245b834551068b",
+  "disputeType": "route_deviation",
+  "model": "gemini-3.8-flash",
+  "payload": {
+    "driver": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "D1",
+          "D2"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 2,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 2
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "EXPLAINED_DEVIATION_KM",
+                "value": 0.0
+              }
+            ],
+            "claim": "Verified route conditions explain 0.0 km of the 8.6 km deviation.",
+            "claimId": "D1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "Only conditions backed by verified evidence reduce the explained deviation."
+          },
+          {
+            "assertedFacts": [
+              {
+                "fact": "UNEXPLAINED_DEVIATION_KM",
+                "value": 8.6
+              }
+            ],
+            "claim": "8.6 km of deviation remains unexplained by verified conditions.",
+            "claimId": "D2",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "Adverse fact acknowledged rather than concealed."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "NO_REFUND",
+        "side": "DRIVER",
+        "summary": "The driver relies on 1 verified route condition(s) covering part of the deviation."
+      },
+      "side": "DRIVER"
+    },
+    "rider": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "R1",
+          "R2"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 2,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 2
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "DEVIATION_PERCENTAGE",
+                "value": 47.25
+              },
+              {
+                "fact": "DISTANCE_DIFFERENCE_KM",
+                "value": 8.6
+              }
+            ],
+            "claim": "The actual route was 26.8 km against an expected 18.2 km, a 47.25% deviation.",
+            "claimId": "R1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "The measured distance difference is a trusted calculation and is not covered in full by verified route conditions."
+          },
+          {
+            "assertedFacts": [
+              {
+                "fact": "UNEXPLAINED_DEVIATION_KM",
+                "value": 8.6
+              }
+            ],
+            "claim": "8.6 km of the deviation has no verified explanation in the case record.",
+            "claimId": "R2",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "Explained deviation is capped by verified conditions only, leaving the remainder unexplained."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "PARTIAL_REFUND",
+        "side": "RIDER",
+        "summary": "The rider relies on the measured route deviation and the unexplained portion of the fare difference."
+      },
+      "side": "RIDER"
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage4-v1",
+  "stage": "ADVOCATES",
+  "trustedContextHash": "331b55d9e251d6464643de9edcbe32f2eb1c3330298a805aa379991a1c89ffe9"
+}

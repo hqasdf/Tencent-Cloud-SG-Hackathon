@@ -1,12 +1,17 @@
-import type { AdvocateClaim, AdvocateRunResult, AdvocateSideResult, PipelineStage, RejectedClaim } from "../types/advocate";
-import { labelize } from "../utils/format";
+import type { AdvocateClaim, AdvocateSideResult, PipelineStage, RejectedClaim, VerificationSummary } from "../types/advocate";
+import { humanize, labelize } from "../utils/format";
 
 /**
- * Stage 4 advocate panels.
+ * The two advocates' arguments, as the case workflow renders them.
  *
  * These replace the old hardcoded `riderCase` / `driverCase` panels entirely.
- * The visible arguments are now the live, code-verified output of the two
+ * The visible arguments are the live, code-verified output of the two
  * advocates, and rejected claims stay on screen rather than being hidden.
+ *
+ * Note what is NOT here: a run button, a provider badge, or a "Stage 4" label.
+ * The action that produces this content lives once, in the workflow toolbar, and
+ * provenance is stated once, beside it. Rendering a second run button here is
+ * what previously made the page ambiguous about which button to press.
  */
 
 function ClaimCard({ claim }: { claim: AdvocateClaim }) {
@@ -138,79 +143,42 @@ function PipelineStrip({ pipeline }: { pipeline: PipelineStage[] }) {
   );
 }
 
-export interface AdvocateRunPanelProps {
-  result: AdvocateRunResult | null;
-  running: boolean;
-  error: string | null;
-  onRun: () => void;
+export interface AdvocateArgumentsProps {
+  rider: AdvocateSideResult;
+  driver: AdvocateSideResult;
+  pipeline: PipelineStage[];
+  verificationSummary: VerificationSummary;
 }
 
-export function AdvocateRunPanel({ result, running, error, onRun }: AdvocateRunPanelProps) {
-  const judgeStage = result?.pipeline.find((stage) => stage.stage === "JUDGE");
-
+/**
+ * Both sides' arguments, plus the headline verification result.
+ *
+ * The verified/rejected counts are hoisted above the two columns because that
+ * ratio is the single number that tells an operator how much of what the models
+ * said survived contact with the case record.
+ */
+export function AdvocateArguments({ rider, driver, pipeline, verificationSummary }: AdvocateArgumentsProps) {
   return (
     <>
-      <section className="panel advocate-control">
-        <div className="panel-heading">
-          <div>
-            <span className="eyebrow">Stage 4 · Advocates</span>
-            <h3>Rider and Driver advocates</h3>
-          </div>
-          <div className="advocate-heading-actions">
-            {result && (
-              // The demo must never be able to imply a mock response is live AI,
-              // so the mode is stated explicitly rather than left to the model field.
-              <span className={`mode-badge ${result.agentRun.mode}`}>
-                {result.agentRun.mode === "real" ? "REAL MODEL" : "MOCK"}
-              </span>
-            )}
-            <button onClick={onRun} disabled={running} className="run-advocates">
-              {running ? "Running advocates…" : result ? "Run again" : "Run advocates"}
-            </button>
-          </div>
-        </div>
-        <p className="prototype-note">
-          CODE calculates the facts. The advocates argue from those facts. CODE then verifies every
-          claim. The Judge stage is not part of this milestone and is reported as not run.
-        </p>
-        {result?.agentRun.mode === "mock" && (
-          <p className="mode-note">
-            Mock mode: deterministic, offline output derived from the case context. No live model was
-            called.
-          </p>
-        )}
-        {error && <p className="review-reason">{error}</p>}
-        {result && (
-          <>
-            <div className="advocate-meta">
-              <span><small>Mode</small><b>{result.agentRun.mode}</b></span>
-              <span><small>Provider</small><b>{result.agentRun.provider}</b></span>
-              <span><small>Model</small><b>{result.agentRun.model ?? "n/a (mock)"}</b></span>
-              <span><small>Duration</small><b>{result.agentRun.durationMs} ms</b></span>
-              <span>
-                <small>Tokens</small>
-                <b>{result.agentRun.totalTokens ?? "n/a"}</b>
-              </span>
-              <span><small>Prompts</small><b>{result.agentRun.promptVersion}</b></span>
-              <span><small>Verified</small><b>{result.verificationSummary.verifiedCount}</b></span>
-              <span><small>Rejected</small><b>{result.verificationSummary.rejectedCount}</b></span>
-            </div>
-            {judgeStage?.status === "NOT_RUN" && (
-              <p className="judge-not-run">Judge: not run in this milestone.</p>
-            )}
-          </>
-        )}
+      <div className="advocate-meta">
+        <span>
+          <small>Claims verified by code</small>
+          <b>{verificationSummary.verifiedCount}</b>
+        </span>
+        <span>
+          <small>Claims rejected by code</small>
+          <b>{verificationSummary.rejectedCount}</b>
+        </span>
+        <span>
+          <small>Rejection reasons</small>
+          <b>{verificationSummary.rejectionReasons.length === 0 ? "None" : verificationSummary.rejectionReasons.map(humanize).join(" · ")}</b>
+        </span>
+      </div>
+      <PipelineStrip pipeline={pipeline} />
+      <section className="advocates-grid">
+        <AdvocatePanel side={rider} />
+        <AdvocatePanel side={driver} />
       </section>
-
-      {result && (
-        <>
-          <PipelineStrip pipeline={result.pipeline} />
-          <section className="advocates-grid">
-            <AdvocatePanel side={result.rider} />
-            <AdvocatePanel side={result.driver} />
-          </section>
-        </>
-      )}
     </>
   );
 }

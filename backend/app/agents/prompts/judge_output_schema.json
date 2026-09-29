@@ -20,6 +20,16 @@
       "enum": ["COMPLETE", "PENDING_HUMAN_REVIEW"],
       "description": "COMPLETE only when the case is eligible for an automated outcome. Otherwise PENDING_HUMAN_REVIEW."
     },
+    "consideredRiderRebuttalIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional. Rider rebuttal IDs you took into account, e.g. RIDER-RB1. Must appear in your context. A rejected rebuttal is not in your context and must not be cited. An empty list is valid."
+    },
+    "consideredDriverRebuttalIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional. Driver rebuttal IDs you took into account, e.g. DRIVER-RB1. Must appear in your context. An empty list is valid."
+    },
     "recommendedOutcome": {
       "type": "string",
       "description": "The outcome you recommend, chosen from the outcomes listed in your context. Never invent an outcome, and never include an amount.",

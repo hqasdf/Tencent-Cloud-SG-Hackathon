@@ -5,27 +5,30 @@ import json
 from app.agents.provider import AgentCompletionRequest, LlmCompletion
 from app.models.agent import AgentCaseContext, NoShowFacts, RouteDeviationFacts
 from app.models.judge import JudgeCaseContext
+from app.models.rebuttal import RebuttalCaseContext
 
 
 class MockLlmProvider:
-    """Deterministic, offline provider for both the advocates and the Judge.
+    """Deterministic, offline provider for the advocates, rebuttals and the Judge.
 
     Output is *derived* from the supplied context rather than being a fixed
     string, so mock mode stays realistic as fixtures evolve while remaining
     fully deterministic for tests. No network access, no credentials.
 
-    The role is read from the request metadata, so one provider serves both
-    agent types without either of them knowing a mock exists.
+    The role is read from the request metadata, so one provider serves every
+    agent type without any of them knowing a mock exists.
     """
 
     name = "mock"
 
     def complete(self, request: AgentCompletionRequest) -> LlmCompletion:
-        payload = (
-            _judge_output(_read_judge_context(request))
-            if request.metadata.get("role") == "judge"
-            else _advocate_output(request)
-        )
+        role = request.metadata.get("role")
+        if role == "judge":
+            payload = _judge_output(_read_judge_context(request))
+        elif role == "rebuttal":
+            payload = _rebuttal_output(_read_rebuttal_context(request))
+        else:
+            payload = _advocate_output(request)
         return LlmCompletion(
             raw_text=json.dumps(payload, indent=2),
             provider_name=self.name,
@@ -52,6 +55,82 @@ def _read_judge_context(request: AgentCompletionRequest) -> JudgeCaseContext:
     if not raw:
         raise ValueError("MockLlmProvider requires context_json metadata")
     return JudgeCaseContext.model_validate_json(raw)
+
+
+def _read_rebuttal_context(request: AgentCompletionRequest) -> RebuttalCaseContext:
+    raw = request.metadata.get("context_json")
+    if not raw:
+        raise ValueError("MockLlmProvider requires context_json metadata")
+    return RebuttalCaseContext.model_validate_json(raw)
+
+
+def _rebuttal_output(context: RebuttalCaseContext) -> dict:
+    """A schema-valid rebuttal derived from the opposing verified claims.
+
+    Every reference is taken from the context, so the mock cannot produce
+    something the real validator would reject. That matters: a mock that emits
+    invalid references would make mock mode stop rehearsing the real pipeline.
+
+    The first opposing claim is challenged and the rest are conceded. That is a
+    deliberate, deterministic split rather than a random one, and it exercises
+    both stances in a single run so the concession path is covered by the
+    end-to-end flow.
+    """
+    policy_rule_ids = [rule.rule_id for rule in context.applicable_policy.rules]
+    first_rule = policy_rule_ids[0] if policy_rule_ids else ""
+
+    responses = []
+    concessions = []
+    for index, claim in enumerate(context.opposing_verified_claims):
+        stance = "CHALLENGE" if index == 0 else "CONCEDE"
+        if stance != "CHALLENGE":
+            concessions.append(claim.claim_id)
+        if stance == "CHALLENGE":
+            reasoning = (
+                "This states a measured value accurately, but a measurement on its own "
+                "does not establish the outcome that "
+                + context.own_side
+                + " is asking the decision to reach."
+            )
+        else:
+            reasoning = (
+                "This states a measured value that matches the trusted record, so it is "
+                "accepted as stated."
+            )
+        responses.append(
+            {
+                "targetClaimId": claim.claim_id,
+                # Echo the target's own evidence so the reference is valid by
+                # construction. No new evidence is introduced in rebuttal.
+                "evidenceIds": list(claim.evidence_ids),
+                "policyRuleIds": [first_rule] if first_rule else [],
+                "reasoningSummary": reasoning,
+                "stance": stance,
+                "assertedFacts": [
+                    {"fact": item.fact, "value": item.value}
+                    for item in claim.asserted_facts[:1]
+                ],
+            }
+        )
+
+    if not context.opposing_verified_claims:
+        summary = (
+            "The opposing side has no verified claim in this record, so there is "
+            "nothing to respond to."
+        )
+    else:
+        summary = (
+            f"{len(responses)} of the opposing side's verified claims were addressed: "
+            "one is challenged as insufficient to support the outcome sought, and the "
+            "remainder are accepted as accurate statements of the trusted record."
+        )
+
+    return {
+        "side": context.own_side,
+        "responses": responses,
+        "concessions": concessions,
+        "overallSummary": summary,
+    }
 
 
 def _judge_output(context: JudgeCaseContext) -> dict:
@@ -114,6 +193,14 @@ def _judge_output(context: JudgeCaseContext) -> dict:
         "acceptedDriverClaimIds": [c.claim_id for c in context.driver.verified_claims],
         "rejectedRiderClaimIds": [],
         "rejectedDriverClaimIds": [],
+        # Every verified rebuttal is cited, so the reference path is exercised
+        # end to end in mock mode. A real Judge may cite none.
+        "consideredRiderRebuttalIds": [
+            item.rebuttal_id for item in context.verified_rider_rebuttals
+        ],
+        "consideredDriverRebuttalIds": [
+            item.rebuttal_id for item in context.verified_driver_rebuttals
+        ],
         "reasoningSummary": reasoning,
         "evidenceIds": evidence_ids,
         "policyRuleIds": policy_rule_ids,

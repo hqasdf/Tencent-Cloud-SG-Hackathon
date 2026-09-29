@@ -1,0 +1,63 @@
+{
+  "caseId": "DISP-002",
+  "createdAt": "2026-09-29T15:23:04.826240+00:00",
+  "deterministicAnalysisHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+  "disputeType": "no_show_charge",
+  "model": null,
+  "payload": {
+    "execution": {
+      "durationMs": 0,
+      "failureCode": null,
+      "generatedClaimCount": 0,
+      "inputTokens": null,
+      "malformedOutput": false,
+      "model": null,
+      "outputTokens": null,
+      "provider": "mock",
+      "rejectedClaimCount": 0,
+      "rejectionReasons": [],
+      "totalTokens": null,
+      "verifiedClaimCount": 0
+    },
+    "output": {
+      "acceptedDriverClaimIds": [
+        "DRIVER-D1"
+      ],
+      "acceptedRiderClaimIds": [
+        "RIDER-R1"
+      ],
+      "consideredDriverRebuttalIds": [
+        "DRIVER-RB1"
+      ],
+      "consideredRiderRebuttalIds": [
+        "RIDER-RB1"
+      ],
+      "evidenceIds": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "policyRuleIds": [
+        "NO_SHOW_REQUIRED_EVIDENCE",
+        "NO_SHOW_PICKUP_RADIUS",
+        "NO_SHOW_WAIT_TIME",
+        "NO_SHOW_EVIDENCE_CONSISTENCY"
+      ],
+      "reasoningSummary": "The driver was recorded inside the pickup radius and the recorded waiting duration is above the policy threshold, so the charge is supported by the record.",
+      "recommendedOutcome": "UPHOLD_CANCELLATION_CHARGE",
+      "rejectedDriverClaimIds": [],
+      "rejectedRiderClaimIds": [],
+      "requiresHumanReview": false,
+      "status": "COMPLETE",
+      "uncertainties": []
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage5-v1",
+  "stage": "JUDGE",
+  "trustedContextHash": "a808a5b2033bb21bc7b7527023b2683272f1eda78f9ec3b2f5c7ce32dc7379bc"
+}

@@ -1,0 +1,138 @@
+{
+  "caseId": "DISP-005",
+  "createdAt": "2026-09-29T15:23:04.806480+00:00",
+  "deterministicAnalysisHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+  "disputeType": "route_deviation",
+  "model": null,
+  "payload": {
+    "driver": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "DRIVER-RB1|RIDER-R1|CHALLENGE",
+          "DRIVER-RB2|RIDER-R3|CONCEDE"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 2,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 2
+      },
+      "failure_reason": null,
+      "output": {
+        "concessions": [
+          "RIDER-R3"
+        ],
+        "overallSummary": "2 of the opposing side's verified claims were addressed: one is challenged as insufficient to support the outcome sought, and the remainder are accepted as accurate statements of the trusted record.",
+        "responses": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "DEVIATION_PERCENTAGE",
+                "value": 27.83
+              }
+            ],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "policyRuleIds": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "This states a measured value accurately, but a measurement on its own does not establish the outcome that DRIVER is asking the decision to reach.",
+            "stance": "CHALLENGE",
+            "targetClaimId": "RIDER-R1"
+          },
+          {
+            "assertedFacts": [
+              {
+                "fact": "EXPLAINED_DEVIATION_KM",
+                "value": 3.2
+              }
+            ],
+            "evidenceIds": [
+              "E03",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "policyRuleIds": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "This states a measured value that matches the trusted record, so it is accepted as stated.",
+            "stance": "CONCEDE",
+            "targetClaimId": "RIDER-R3"
+          }
+        ],
+        "side": "DRIVER"
+      },
+      "side": "DRIVER",
+      "status": "COMPLETE"
+    },
+    "rider": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "RIDER-RB1|DRIVER-D1|CHALLENGE"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "failure_reason": null,
+      "output": {
+        "concessions": [],
+        "overallSummary": "1 of the opposing side's verified claims were addressed: one is challenged as insufficient to support the outcome sought, and the remainder are accepted as accurate statements of the trusted record.",
+        "responses": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "EXPLAINED_DEVIATION_KM",
+                "value": 3.2
+              }
+            ],
+            "evidenceIds": [
+              "E06"
+            ],
+            "policyRuleIds": [
+              "ROUTE_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "This states a measured value accurately, but a measurement on its own does not establish the outcome that RIDER is asking the decision to reach.",
+            "stance": "CHALLENGE",
+            "targetClaimId": "DRIVER-D1"
+          }
+        ],
+        "side": "RIDER"
+      },
+      "side": "RIDER",
+      "status": "COMPLETE"
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage6-v1",
+  "stage": "REBUTTALS",
+  "trustedContextHash": "174590ce48b9c9db6625616f9ed796455048de73d341d39e85a1969e3cb81dd6"
+}

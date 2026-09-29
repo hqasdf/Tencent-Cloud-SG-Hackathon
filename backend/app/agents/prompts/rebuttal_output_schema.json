@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RebuttalOutput",
+  "description": "Bounded cross-examination output. Both sides use this exact schema; only the `side` value differs. One round only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["side", "responses", "concessions", "overallSummary"],
+  "properties": {
+    "side": {
+      "type": "string",
+      "enum": ["RIDER", "DRIVER"],
+      "description": "Must match the side you were assigned. Submitting the other side is rejected."
+    },
+    "responses": {
+      "type": "array",
+      "description": "One entry per opposing claim you are responding to. May be empty. Responding to fewer claims honestly is better than responding thinly to all of them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["targetClaimId", "stance", "reasoningSummary", "evidenceIds", "policyRuleIds", "assertedFacts"],
+        "properties": {
+          "targetClaimId": {
+            "type": "string",
+            "description": "A claim ID from `opposingVerifiedClaims`, written exactly as supplied including its side prefix (e.g. DRIVER-C1). Targeting your own claim, or an ID that is not in the context, is rejected."
+          },
+          "stance": {
+            "type": "string",
+            "enum": ["CHALLENGE", "CONCEDE", "PARTIALLY_CONCEDE"],
+            "description": "CHALLENGE means the claim is incomplete, misleading, or does not support the conclusion drawn from it — never that the verified measurement is untrue."
+          },
+          "reasoningSummary": {
+            "type": "string",
+            "description": "A concise statement of your position. Not a place to think out loud; internal deliberation must not be included."
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Evidence IDs from the supplied context only. There is no new evidence in this round; never invent an ID."
+          },
+          "policyRuleIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Policy rule IDs from the supplied context only. Never invent a rule."
+          },
+          "assertedFacts": {
+            "type": "array",
+            "description": "Measured values quoted from the trusted context, so they can be verified. A value that contradicts the trusted analysis is rejected.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["fact", "value"],
+              "properties": {
+                "fact": {
+                  "type": "string",
+                  "enum": [
+                    "EXPECTED_DISTANCE_KM",
+                    "ACTUAL_DISTANCE_KM",
+                    "DISTANCE_DIFFERENCE_KM",
+                    "DEVIATION_PERCENTAGE",
+                    "EXPECTED_DURATION_MINUTES",
+                    "ACTUAL_DURATION_MINUTES",
+                    "DURATION_DIFFERENCE_MINUTES",
+                    "EXPECTED_FARE",
+                    "ACTUAL_FARE",
+                    "FARE_DIFFERENCE",
+                    "EXPLAINED_DEVIATION_KM",
+                    "UNEXPLAINED_DEVIATION_KM",
+                    "DRIVER_PICKUP_DISTANCE_METERS",
+                    "WITHIN_PICKUP_RADIUS",
+                    "WAITING_DURATION_SECONDS",
+                    "CANCELLATION_CHARGE_AMOUNT"
+                  ]
+                },
+                "value": {
+                  "type": ["number", "boolean", "string"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "concessions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Target claim IDs you are conceding. Every entry must correspond to a response whose stance is CONCEDE or PARTIALLY_CONCEDE. Listing a claim you challenged is rejected."
+    },
+    "overallSummary": {
+      "type": "string",
+      "description": "One to three sentences summarising your response to the opposing case."
+    }
+  }
+}

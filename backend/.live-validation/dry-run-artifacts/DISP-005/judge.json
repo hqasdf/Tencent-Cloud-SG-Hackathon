@@ -1,0 +1,64 @@
+{
+  "caseId": "DISP-005",
+  "createdAt": "2026-09-29T15:23:04.810311+00:00",
+  "deterministicAnalysisHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+  "disputeType": "route_deviation",
+  "model": null,
+  "payload": {
+    "execution": {
+      "durationMs": 0,
+      "failureCode": null,
+      "generatedClaimCount": 0,
+      "inputTokens": null,
+      "malformedOutput": false,
+      "model": null,
+      "outputTokens": null,
+      "provider": "mock",
+      "rejectedClaimCount": 0,
+      "rejectionReasons": [],
+      "totalTokens": null,
+      "verifiedClaimCount": 0
+    },
+    "output": {
+      "acceptedDriverClaimIds": [
+        "DRIVER-D1"
+      ],
+      "acceptedRiderClaimIds": [
+        "RIDER-R1",
+        "RIDER-R3"
+      ],
+      "consideredDriverRebuttalIds": [
+        "DRIVER-RB1",
+        "DRIVER-RB2"
+      ],
+      "consideredRiderRebuttalIds": [
+        "RIDER-RB1"
+      ],
+      "evidenceIds": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "policyRuleIds": [
+        "ROUTE_REQUIRED_EVIDENCE",
+        "ROUTE_UNEXPLAINED_DEVIATION",
+        "ROUTE_EVIDENCE_CONSISTENCY"
+      ],
+      "reasoningSummary": "Every part of the measured deviation is covered by a verified route condition, so the record does not support an adjustment.",
+      "recommendedOutcome": "NO_REFUND",
+      "rejectedDriverClaimIds": [],
+      "rejectedRiderClaimIds": [],
+      "requiresHumanReview": false,
+      "status": "COMPLETE",
+      "uncertainties": []
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage5-v1",
+  "stage": "JUDGE",
+  "trustedContextHash": "174590ce48b9c9db6625616f9ed796455048de73d341d39e85a1969e3cb81dd6"
+}

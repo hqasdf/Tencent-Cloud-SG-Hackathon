@@ -43,6 +43,9 @@ from app.models.agent import (
     NoShowFacts,
     RouteDeviationFacts,
 )
+from app.models.explanation import DecisionCounterfactual, DecisionExplanation
+from app.models.rebuttal import RebuttalRunResponse, VerifiedRebuttal
+from app.models.replay import ReplayMetadata
 
 JudgeModelBase = BaseModel
 
@@ -157,12 +160,25 @@ class JudgeSideClaims(JudgeCaseModel):
     unmistakable in the prompt: an advocate that completed with nothing trusted
     is very different from one whose claims were all rejected, and the Judge must
     not be left to infer which it is looking at.
+
+    The camelCase aliases matter here for the same reason they matter everywhere
+    else in the prompt: this object is serialized into the Judge's context, and a
+    payload that mixes ``verifiedClaims`` with ``verified_claim_count`` invites a
+    model producing structured output to echo the wrong convention back.
     """
 
     side: Literal["RIDER", "DRIVER"]
-    verified_claim_count: int
-    has_verified_claims: bool
-    verified_claims: list[AdvocateClaim] = Field(default_factory=list)
+    verified_claim_count: int = Field(
+        serialization_alias="verifiedClaimCount", validation_alias="verifiedClaimCount"
+    )
+    has_verified_claims: bool = Field(
+        serialization_alias="hasVerifiedClaims", validation_alias="hasVerifiedClaims"
+    )
+    verified_claims: list[AdvocateClaim] = Field(
+        default_factory=list,
+        serialization_alias="verifiedClaims",
+        validation_alias="verifiedClaims",
+    )
 
 
 class JudgeCaseContext(JudgeCaseModel):
@@ -202,6 +218,24 @@ class JudgeCaseContext(JudgeCaseModel):
     )
     rider: JudgeSideClaims
     driver: JudgeSideClaims
+    verified_rider_rebuttals: list[VerifiedRebuttal] = Field(
+        default_factory=list,
+        serialization_alias="verifiedRiderRebuttals",
+        validation_alias="verifiedRiderRebuttals",
+        description=(
+            "The Rider's rebuttal responses that passed deterministic verification. "
+            "Rejected rebuttals are absent entirely — not summarised, not labelled, "
+            "not counted."
+        ),
+    )
+    verified_driver_rebuttals: list[VerifiedRebuttal] = Field(
+        default_factory=list,
+        serialization_alias="verifiedDriverRebuttals",
+        validation_alias="verifiedDriverRebuttals",
+        description=(
+            "The Driver's rebuttal responses that passed deterministic verification."
+        ),
+    )
     resolution_mode: Literal["AUTO_RESOLVE", "HUMAN_REVIEW"] = Field(
         serialization_alias="resolutionMode", validation_alias="resolutionMode"
     )
@@ -257,6 +291,21 @@ class JudgeOutput(JudgeModel):
     )
     reasoning_summary: str = Field(
         serialization_alias="reasoningSummary", validation_alias="reasoningSummary"
+    )
+    considered_rider_rebuttal_ids: list[str] = Field(
+        default_factory=list,
+        serialization_alias="consideredRiderRebuttalIds",
+        validation_alias="consideredRiderRebuttalIds",
+        description=(
+            "Rider rebuttals the Judge took into account. Optional: a Judge may "
+            "reach a conclusion without relying on any rebuttal, and an empty list "
+            "is a valid answer rather than a failure to engage."
+        ),
+    )
+    considered_driver_rebuttal_ids: list[str] = Field(
+        default_factory=list,
+        serialization_alias="consideredDriverRebuttalIds",
+        validation_alias="consideredDriverRebuttalIds",
     )
     evidence_ids: list[str] = Field(
         default_factory=list, serialization_alias="evidenceIds", validation_alias="evidenceIds"
@@ -325,6 +374,16 @@ class JudgeResult(JudgeModel):
     reasoning_summary: str = Field(
         default="", serialization_alias="reasoningSummary", validation_alias="reasoningSummary"
     )
+    considered_rider_rebuttal_ids: list[str] = Field(
+        default_factory=list,
+        serialization_alias="consideredRiderRebuttalIds",
+        validation_alias="consideredRiderRebuttalIds",
+    )
+    considered_driver_rebuttal_ids: list[str] = Field(
+        default_factory=list,
+        serialization_alias="consideredDriverRebuttalIds",
+        validation_alias="consideredDriverRebuttalIds",
+    )
     evidence_ids: list[str] = Field(
         default_factory=list, serialization_alias="evidenceIds", validation_alias="evidenceIds"
     )
@@ -391,12 +450,19 @@ class AuditEvent(JudgeModel):
 
 
 class CaseResolutionResponse(JudgeModel):
-    """The Stage 5 orchestration result.
+    """The Stage 6 orchestration result.
 
-    The Judge block and the deterministic block are separate top-level fields on
-    purpose. Merging them would make an advisory recommendation look like an
-    authorisation, which is the single most dangerous presentation error this
-    stage could make.
+    The layers are separate top-level fields on purpose: ``rider`` / ``driver``
+    hold the initial arguments, ``rebuttals`` holds the cross-examination, and
+    ``judge`` and ``deterministic_resolution`` hold the advisory and the
+    authoritative conclusions. Merging any of them would blur which layer
+    produced which statement, and merging the last two would make an advisory
+    recommendation look like an authorisation — the single most dangerous
+    presentation error this pipeline could make.
+
+    ``explanation`` and ``counterfactual`` are deterministic projections. They
+    are siblings of ``judge`` rather than children of it, because they are
+    computed without reference to the Judge at all.
     """
 
     case_id: str = Field(serialization_alias="caseId", validation_alias="caseId")
@@ -405,6 +471,7 @@ class CaseResolutionResponse(JudgeModel):
     )
     rider: AdvocateSideResult
     driver: AdvocateSideResult
+    rebuttals: RebuttalRunResponse
     agent_run: AgentRunMetadata = Field(
         serialization_alias="agentRun", validation_alias="agentRun"
     )
@@ -416,6 +483,23 @@ class CaseResolutionResponse(JudgeModel):
         serialization_alias="deterministicResolution",
         validation_alias="deterministicResolution",
     )
+    explanation: DecisionExplanation = Field(
+        serialization_alias="explanation", validation_alias="explanation"
+    )
+    counterfactual: DecisionCounterfactual = Field(
+        serialization_alias="counterfactual", validation_alias="counterfactual"
+    )
+    replay_metadata: ReplayMetadata = Field(
+        default_factory=ReplayMetadata,
+        serialization_alias="replayMetadata",
+        validation_alias="replayMetadata",
+        description=(
+            "Provenance for this run. Present on every response, including a "
+            "fully live one, so the absence of replay is stated rather than "
+            "inferred. The frontend badges a replayed run from this field and "
+            "never has to guess whether a model was actually called."
+        ),
+    )
     pipeline: list[PipelineStage] = Field(default_factory=list)
     audit: list[AuditEvent] = Field(default_factory=list)
 
@@ -423,6 +507,8 @@ class CaseResolutionResponse(JudgeModel):
 __all__ = [
     "AuditEvent",
     "CaseResolutionResponse",
+    "DecisionCounterfactual",
+    "DecisionExplanation",
     "DeterministicResolution",
     "JUDGE_ALLOWED_OUTCOMES",
     "JudgeCaseContext",

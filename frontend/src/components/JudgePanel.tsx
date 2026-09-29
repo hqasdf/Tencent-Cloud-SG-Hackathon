@@ -1,19 +1,22 @@
 import type { JudgeResult, DeterministicResolution, AuditEvent } from "../types/judge";
-import { labelize, money } from "../utils/format";
+import { humanize, labelize, money } from "../utils/format";
 
 /**
- * Stage 5 Judge panel.
+ * Judge panel — split into its two halves.
  *
- * The whole point of this component is the visual separation between two
- * columns that a user could otherwise conflate:
+ * These were once two columns of a single `judge-grid`, and the separation
+ * existed so a reader could not conflate them:
  *
- *   left  — the AI Judge's advisory recommendation and its justification
- *   right — what deterministic code is actually willing to do
+ *   advisory      — the AI Judge's recommendation and its justification
+ *   deterministic — what code is actually willing to do
  *
- * They are given different headings, different accents and an explicit note,
- * because presenting an advisory recommendation with the same weight as an
- * authorised action is the most dangerous presentation error this stage could
- * make. Nothing on the left can move anything on the right.
+ * They are now two consecutive steps in the case workflow instead. The
+ * separation is preserved — arguably strengthened — because the sequence itself
+ * enforces it: the advisory step is explicitly framed as "it cannot change the
+ * outcome" and points forward, and the deterministic step follows as the only
+ * place an outcome is stated. What must NOT change is the weight: nothing in
+ * the advisory half may ever be rendered with the same authority as the
+ * deterministic half, and no value from the Judge may appear as a decision.
  */
 
 function StatusBadge({ status }: { status: JudgeResult["status"] }) {
@@ -31,7 +34,7 @@ function ClaimIdList({ ids, empty }: { ids: string[]; empty: string }) {
   );
 }
 
-function AdvisoryColumn({ judge }: { judge: JudgeResult }) {
+export function JudgeAdvisoryPanel({ judge }: { judge: JudgeResult }) {
   const notRun = judge.status === "NOT_RUN";
   const failed = judge.status === "FAILED";
   const pending = judge.status === "PENDING_HUMAN_REVIEW";
@@ -48,7 +51,7 @@ function AdvisoryColumn({ judge }: { judge: JudgeResult }) {
 
       <p className="judge-boundary-note">
         This is a recommendation only. It cannot change the refund, the confidence or the
-        escalation state — those are calculated by code, shown on the right.
+        escalation state — those are calculated by code and are stated in the next step.
       </p>
 
       {judge.execution && (
@@ -140,7 +143,7 @@ function AdvisoryColumn({ judge }: { judge: JudgeResult }) {
   );
 }
 
-function DeterministicColumn({ resolution }: { resolution: DeterministicResolution }) {
+export function DeterministicOutcomePanel({ resolution }: { resolution: DeterministicResolution }) {
   const humanReview = resolution.resolutionMode === "HUMAN_REVIEW";
   return (
     <article className="panel judge-panel deterministic">
@@ -150,13 +153,14 @@ function DeterministicColumn({ resolution }: { resolution: DeterministicResoluti
           <h3>Authoritative outcome</h3>
         </div>
         <span className={`resolution-mode ${resolution.resolutionMode.toLowerCase()}`}>
-          {labelize(resolution.resolutionMode)}
+          {humanize(resolution.resolutionMode)}
         </span>
       </div>
 
       <p className="judge-boundary-note">
         Computed by the resolution, confidence and escalation engines without reference to the
-        Judge. This is what actually happens.
+        Judge. The recommendation in the previous step cannot move any value here — this is what
+        actually happens.
       </p>
 
       <div className="decision-stats">
@@ -183,14 +187,22 @@ function DeterministicColumn({ resolution }: { resolution: DeterministicResoluti
 
       {resolution.escalationReasons.length > 0 && (
         <p className="review-reason">
-          Escalation: {resolution.escalationReasons.map((reason) => labelize(reason)).join(", ")}
+          Escalation: {resolution.escalationReasons.map(humanize).join(" · ")}
         </p>
       )}
     </article>
   );
 }
 
-function AuditStrip({ events }: { events: AuditEvent[] }) {
+/**
+ * The machine-readable trail behind the run.
+ *
+ * Every AI step and every code step appended to it, in order. It is shown
+ * because "the code checked the AI" is a claim, and this is the evidence for
+ * it — but it is not the thing an operator reads first, so it lives at the end
+ * of the workflow rather than at the top.
+ */
+export function AuditTrail({ events }: { events: AuditEvent[] }) {
   if (events.length === 0) return null;
   return (
     <section className="panel judge-audit">
@@ -204,24 +216,5 @@ function AuditStrip({ events }: { events: AuditEvent[] }) {
         ))}
       </div>
     </section>
-  );
-}
-
-export interface JudgePanelProps {
-  judge: JudgeResult | null;
-  resolution: DeterministicResolution | null;
-  audit: AuditEvent[];
-}
-
-export function JudgePanel({ judge, resolution, audit }: JudgePanelProps) {
-  if (!judge || !resolution) return null;
-  return (
-    <>
-      <section className="judge-grid">
-        <AdvisoryColumn judge={judge} />
-        <DeterministicColumn resolution={resolution} />
-      </section>
-      <AuditStrip events={audit} />
-    </>
   );
 }

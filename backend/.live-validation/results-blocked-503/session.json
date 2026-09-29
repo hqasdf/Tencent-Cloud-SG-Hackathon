@@ -1,0 +1,30 @@
+{
+  "startedAt": "2026-09-29T15:25:04.001720+00:00",
+  "offline": false,
+  "provider": "openai_compatible",
+  "model": "gemini-3.8-flash",
+  "mode": "real",
+  "maxRetriesForSession": 1,
+  "budgetAtStart": 0,
+  "cases": [
+    {
+      "caseId": "DISP-005",
+      "label": "route",
+      "error": null,
+      "logicalCalls": 2,
+      "httpAttempts": 4,
+      "byStage": {
+        "RIDER_ADVOCATE": 2,
+        "DRIVER_ADVOCATE": 2
+      },
+      "deterministicUnchanged": true
+    }
+  ],
+  "stoppedEarly": "RIDER_ADVOCATE failed with SERVER_ERROR",
+  "logicalModelCalls": 2,
+  "finishedAt": "2026-09-29T15:25:14.855565+00:00",
+  "actualHttpAttempts": 4,
+  "retries": 2,
+  "rateLimited": false,
+  "serverErrors": 4
+}

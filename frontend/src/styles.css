@@ -1389,3 +1389,692 @@ code {
 @media (max-width: 700px) {
   .judge-claims-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── Stage 6 · Cross-examination & explainability ───
+   Three visual rules carry the stage's meaning:
+
+   1. VERIFIED and REJECTED rebuttals must not look alike. Verified rows are
+      plain; rejected rows are struck back, tinted with the danger palette and
+      labelled "not used by Judge". A reader skimming must not mistake a
+      refused argument for one that shaped the outcome.
+
+   2. The trust sequence alternates AI and CODE steps, so the repeated
+      verification reads as deliberate rather than redundant.
+
+   3. The explainability panels are marked "deterministic" because a reader who
+      assumed a model wrote the counterfactual would reasonably doubt the
+      thresholds. They are policy values, not inventions. */
+
+.cross-examination { margin-bottom: 14px; }
+.cross-exam-heading { margin-bottom: 14px; }
+
+.round-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--rvde-navy);
+  color: var(--rvde-cream);
+  white-space: nowrap;
+}
+
+.rebuttal-column { margin-bottom: 0; }
+.rebuttal-summary {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--rvde-text-soft);
+  margin: 0 0 10px;
+}
+
+.rebuttal-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-soft);
+}
+.rebuttal-status-complete { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.rebuttal-status-failed { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+
+.rebuttal-row {
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--rvde-cream-soft);
+}
+/* Rejected rows are demoted, not deleted: the failure itself is the evidence
+   that the verification layer did something. */
+.rebuttal-row.rejected {
+  background: var(--rvde-danger-bg);
+  border-color: var(--rvde-danger);
+  opacity: 0.92;
+}
+
+.rebuttal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.rebuttal-id {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--rvde-navy);
+}
+.rebuttal-verdict {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.rebuttal-verdict.verified { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.rebuttal-verdict.rejected { background: var(--rvde-danger); color: #fff; }
+
+.stance {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-soft);
+}
+.stance-challenge { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.stance-concede { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.stance-partially_concede { background: #E8EDF7; color: var(--rvde-navy-soft); }
+
+.rebuttal-target { font-size: 11px; color: var(--rvde-text-soft); margin: 0 0 5px; }
+.rebuttal-reasoning { font-size: 12px; line-height: 1.6; margin: 0 0 8px; }
+
+.rebuttal-refs { display: flex; gap: 16px; flex-wrap: wrap; }
+.rebuttal-refs span { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.rebuttal-refs small {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rvde-text-muted);
+}
+.rebuttal-refs code {
+  font-size: 10px;
+  background: var(--rvde-cream);
+  border: 1px solid var(--rvde-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.rebuttal-rejection { font-size: 11px; line-height: 1.6; }
+.rebuttal-rejection p { margin: 4px 0 0; color: var(--rvde-danger); }
+
+.rebuttal-concessions { margin-top: 10px; }
+
+/* Trust sequence */
+.trust-sequence { margin-bottom: 14px; }
+.trust-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--rvde-text-soft);
+}
+/* Even columns rather than one wrapping row: seven steps never fit on one line,
+   and arrows left dangling at a row break read as a broken diagram. */
+.trust-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.trust-step {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--rvde-cream);
+  border: 1px solid var(--rvde-border);
+}
+.trust-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.trust-index {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+.trust-step b { font-size: 11px; font-weight: 600; }
+.trust-owner {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.trust-step.ai .trust-owner { color: var(--rvde-pink-deep); }
+.trust-step.code .trust-owner { color: var(--rvde-navy); }
+/* A CODE step is visually heavier: it is the layer that can refuse. */
+.trust-step.code {
+  background: var(--rvde-cream-soft);
+  border-color: var(--rvde-navy);
+}
+.trust-step.code b { color: var(--rvde-navy); }
+.trust-step.code .trust-index { background: var(--rvde-navy); color: #fff; }
+
+/* Explainability */
+.explain-grid.stage6 { margin-bottom: 14px; }
+.explanation-panel { margin-bottom: 0; }
+
+.explain-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--rvde-navy);
+  color: var(--rvde-cream);
+  white-space: nowrap;
+}
+
+.explain-block { margin-bottom: 14px; }
+
+.decisive-fact {
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 8px;
+  padding: 9px 11px;
+  margin-top: 6px;
+  background: var(--rvde-cream-soft);
+}
+.decisive-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.decisive-head code { font-size: 11px; font-weight: 500; }
+.decisive-head b { font-size: 13px; }
+.decisive-head small { font-size: 10px; color: var(--rvde-text-muted); }
+.decisive-fact p { font-size: 11px; color: var(--rvde-text-soft); margin: 5px 0 0; }
+
+.rule-flag {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.rule-flag.passed { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.rule-flag.failed { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+
+.explain-claims { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.explain-claim {
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: var(--rvde-cream-soft);
+}
+.explain-claim.accepted { border-left: 3px solid var(--rvde-success); }
+.explain-claim.not-accepted { border-left: 3px dashed var(--rvde-border); }
+.explain-claim code { font-size: 11px; font-weight: 500; }
+.explain-claim p { font-size: 12px; line-height: 1.6; margin: 4px 0 5px; }
+.claim-flag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--rvde-text-muted);
+}
+
+.rule-list { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.rule-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--rvde-cream-soft);
+  border-left: 3px solid var(--rvde-border);
+}
+.rule-row.passed { border-left-color: var(--rvde-success); }
+.rule-row.failed { border-left-color: var(--rvde-warn); }
+.rule-row code { font-size: 10px; }
+.rule-row span { color: var(--rvde-text-soft); }
+.rule-row b { font-size: 11px; white-space: nowrap; }
+
+.explain-basis {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--rvde-text-soft);
+  border-top: 1px solid var(--rvde-border-soft);
+  padding-top: 10px;
+  margin: 0;
+}
+
+.counterfactual-list { display: flex; flex-direction: column; gap: 8px; }
+.counterfactual-row {
+  border: 1px solid var(--rvde-border-soft);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--rvde-cream-soft);
+  border-left: 3px solid var(--rvde-border);
+}
+.counterfactual-row.passed { border-left-color: var(--rvde-success); }
+.counterfactual-row.failed { border-left-color: var(--rvde-warn); }
+.counterfactual-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 5px;
+}
+.counterfactual-head code { font-size: 11px; font-weight: 500; }
+.counterfactual-head b { font-size: 13px; margin-left: auto; }
+.counterfactual-row p { font-size: 11px; line-height: 1.6; color: var(--rvde-text-soft); margin: 0; }
+
+.direction {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.direction-below { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.direction-above { background: #E8EDF7; color: var(--rvde-navy-soft); }
+
+@media (max-width: 1050px) {
+  .cross-examination .two-col { grid-template-columns: 1fr; }
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Stage 6B — replay provenance                                        */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Replay is deliberately not styled as a warning. It is not a degraded state:
+ * the output was revalidated against the current case state and the
+ * deterministic half is computed live. It is styled as *different* — neutral,
+ * distinct from both the MOCK badge and the green REAL MODEL badge — so a
+ * reader notices the provenance without reading it as a failure.
+ */
+.mode-badge.replayed {
+  background: var(--rvde-warn-bg);
+  color: var(--rvde-warn);
+  border-color: #F0D6AE;
+  cursor: help;
+}
+
+/*
+ * A refused replay, by contrast, is a real problem and is coloured as one. It
+ * should be rare: the refusal path makes no provider call, so seeing this badge
+ * means the artefact is stale and needs re-capturing.
+ */
+.mode-badge.replay-invalid {
+  background: var(--rvde-danger-bg);
+  color: var(--rvde-danger);
+  border-color: #F3C9C1;
+  cursor: help;
+}
+
+.replay-note {
+  border-left: 3px solid var(--rvde-warn-bg);
+  padding-left: 10px;
+  color: var(--rvde-text-soft);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Case workflow — numbered steps                                      */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The case page is a sequence, not a report. A step card is white against the
+ * cream page so the eight steps read as eight discrete objects; the panels
+ * inside them keep the cream-soft surface, so nesting is legible without a
+ * third border weight.
+ *
+ * Nothing here conveys state through colour alone: every state also has a text
+ * pill, because colour is the first thing lost to greyscale and to
+ * colour-blindness.
+ */
+
+.workflow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Toolbar: the single primary action, plus provenance ─── */
+.workflow-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  background: var(--rvde-navy);
+  border-radius: 16px;
+  color: #F7F9FF;
+}
+.workflow-toolbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.workflow-toolbar-left strong {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.workflow-progress {
+  font-size: 12px;
+  color: #A8B3CF;
+}
+.workflow-progress b { color: #fff; }
+
+.workflow-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wf-run {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  background: var(--rvde-pink);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(255, 58, 110, 0.35);
+  transition: background 0.15s ease;
+}
+.wf-run:hover:not(:disabled) { background: var(--rvde-pink-deep); }
+.wf-run:disabled {
+  background: var(--rvde-text-muted);
+  box-shadow: none;
+  cursor: progress;
+}
+
+.wf-run-ghost {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: transparent;
+  color: #E7ECF7;
+  transition: background 0.15s ease;
+}
+.wf-run-ghost:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.wf-run-ghost:disabled { opacity: 0.5; cursor: progress; }
+
+/* A failed run must be visible wherever the operator is, not buried in a step. */
+.workflow-alert {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--rvde-danger-bg);
+  color: var(--rvde-danger);
+  border-left: 3px solid var(--rvde-danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ─── Progress rail ─── */
+/* Wraps rather than scrolls: a step hidden behind a horizontal scrollbar is a
+   step the operator will not notice exists. */
+.workflow-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rail-chip {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px 9px 10px;
+  background: #fff;
+  border: 1px solid var(--rvde-border);
+  border-radius: 999px;
+  color: var(--rvde-text-soft);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.rail-chip i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-muted);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+}
+.rail-chip.done i { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.rail-chip.ready i { background: var(--rvde-pink); color: #fff; }
+.rail-chip.blocked i { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+.rail-chip.waiting { opacity: 0.72; }
+.rail-chip:hover { border-color: var(--rvde-pink-soft); color: var(--rvde-navy); }
+.rail-chip.current {
+  border-color: var(--rvde-pink);
+  color: var(--rvde-navy);
+  box-shadow: 0 0 0 2px rgba(255, 58, 110, 0.14);
+}
+
+/* ─── Step card ─── */
+.wstep {
+  background: #fff;
+  border: 1px solid var(--rvde-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(26, 43, 74, 0.04);
+}
+.wstep.open { border-color: var(--rvde-pink-soft); }
+
+.wstep-head {
+  font: inherit;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: transparent;
+  border: none;
+}
+.wstep-head:hover { background: var(--rvde-cream-soft); }
+
+.wstep-num {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.wstep.done .wstep-num { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.wstep.ready .wstep-num { background: var(--rvde-pink); color: #fff; }
+.wstep.open .wstep-num { background: var(--rvde-navy); color: #fff; }
+
+.wstep-title { flex: 1 1 auto; min-width: 0; }
+.wstep-title strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--rvde-navy);
+}
+.wstep-title small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--rvde-text-soft);
+}
+
+.wstep-pill {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-muted);
+}
+.wstep-pill.done { background: var(--rvde-success-bg); color: var(--rvde-success); }
+.wstep-pill.ready { background: var(--rvde-pink-soft); color: var(--rvde-pink-deep); }
+.wstep-pill.blocked { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+
+.wstep-chevron {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  margin-left: 2px;
+  border-right: 2px solid var(--rvde-text-muted);
+  border-bottom: 2px solid var(--rvde-text-muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.18s ease;
+}
+.wstep.open .wstep-chevron { transform: rotate(-135deg) translate(-2px, -2px); }
+
+.wstep-body {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--rvde-border-soft);
+}
+
+.wstep-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rvde-border-soft);
+}
+.wstep-foot button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--rvde-border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  background: #fff;
+  color: var(--rvde-navy);
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.wstep-foot button:hover:not(:disabled) { border-color: var(--rvde-pink); color: var(--rvde-pink-deep); }
+.wstep-foot button:disabled { opacity: 0.4; cursor: default; }
+.wstep-foot .wstep-next {
+  background: var(--rvde-navy);
+  border-color: var(--rvde-navy);
+  color: #fff;
+}
+.wstep-foot .wstep-next:hover:not(:disabled) {
+  background: var(--rvde-navy-soft);
+  border-color: var(--rvde-navy-soft);
+  color: #fff;
+}
+.wstep-progress {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rvde-text-muted);
+}
+
+/* Placeholder inside a step that cannot run yet. Dashed, not greyed out —
+   a waiting step is not a broken step. */
+.wstep-empty {
+  padding: 18px;
+  border: 1px dashed var(--rvde-border);
+  border-radius: 12px;
+  background: var(--rvde-cream-soft);
+}
+.wstep-empty b {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--rvde-navy);
+}
+.wstep-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--rvde-text-soft);
+}
+
+/* ─── Case header side ─── */
+.case-header-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.case-header-side small {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rvde-text-muted);
+}
+.mode.neutral {
+  background: var(--rvde-border-soft);
+  color: var(--rvde-text-soft);
+}
+
+@media (max-width: 700px) {
+  .workflow-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .workflow-toolbar-actions { justify-content: stretch; }
+  .wf-run { flex: 1 1 auto; }
+  .wstep-head { padding: 14px; gap: 11px; }
+  .wstep-body { padding: 14px 14px 16px; }
+  .case-header-side { align-items: flex-start; }
+}
+

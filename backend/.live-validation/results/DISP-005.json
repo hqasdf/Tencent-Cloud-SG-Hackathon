@@ -1,0 +1,502 @@
+{
+  "caseId": "DISP-005",
+  "label": "route",
+  "disputeType": "route_deviation",
+  "runAt": "2026-09-29T15:30:06.669155+00:00",
+  "wallClockMs": 9360,
+  "httpAttemptsThisCase": 4,
+  "httpAttemptsByStage": {
+    "RIDER_ADVOCATE": 2,
+    "DRIVER_ADVOCATE": 2
+  },
+  "error": null,
+  "baselineHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+  "baselineContextHash": "174590ce48b9c9db6625616f9ed796455048de73d341d39e85a1969e3cb81dd6",
+  "baselineDeterministic": {
+    "facts": {
+      "analysisType": "route_deviation",
+      "expectedRouteDistanceKm": 11.5,
+      "actualRouteDistanceKm": 14.7,
+      "distanceDifferenceKm": 3.2,
+      "deviationPercentage": 27.83,
+      "expectedTripDurationMinutes": 18.0,
+      "actualTripDurationMinutes": 22.0,
+      "durationDifferenceMinutes": 4.0,
+      "expectedFare": 15.8,
+      "actualFare": 20.1,
+      "fareDifference": 4.3,
+      "explainedDeviationDistanceKm": 3.2,
+      "unexplainedDeviationDistanceKm": 0.0,
+      "conditions": [
+        {
+          "type": "road_closure",
+          "explainedDistanceKm": 3.2,
+          "evidenceIds": [
+            "E06"
+          ]
+        }
+      ],
+      "requiredEvidenceIds": [
+        "E03",
+        "E04",
+        "E05"
+      ],
+      "missingEvidenceIds": [],
+      "contradictoryEvidence": false,
+      "supportingEvidenceIds": [
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ]
+    },
+    "policyEvaluation": {
+      "policyId": "ROUTE_DEVIATION_POLICY_V1",
+      "policyVersion": "1.0.0-prototype",
+      "evaluatedRules": [
+        {
+          "ruleId": "ROUTE_REQUIRED_EVIDENCE",
+          "description": "Required route, deviation, and fare evidence must be present.",
+          "passed": true,
+          "actualValue": 3,
+          "requiredValue": 3,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05"
+          ]
+        },
+        {
+          "ruleId": "ROUTE_UNEXPLAINED_DEVIATION",
+          "description": "Unexplained route deviation must meet the prototype adjustment threshold.",
+          "passed": false,
+          "actualValue": 0.0,
+          "requiredValue": 0.25,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        },
+        {
+          "ruleId": "ROUTE_EVIDENCE_CONSISTENCY",
+          "description": "Critical route evidence must not be contradictory.",
+          "passed": true,
+          "actualValue": false,
+          "requiredValue": false,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05"
+          ]
+        }
+      ],
+      "passedRules": [
+        "ROUTE_REQUIRED_EVIDENCE",
+        "ROUTE_EVIDENCE_CONSISTENCY"
+      ],
+      "failedRules": [
+        "ROUTE_UNEXPLAINED_DEVIATION"
+      ],
+      "supportingEvidenceIds": [
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "overallOutcome": "NO_ELIGIBLE_UNEXPLAINED_DEVIATION"
+    },
+    "ruling": "No refund recommended",
+    "recommendedAction": "NO_REFUND",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "confidence": 0.95,
+    "resolutionMode": "AUTO_RESOLVE",
+    "escalationReasons": []
+  },
+  "stageAttempts": {
+    "RIDER_ADVOCATE": 2,
+    "DRIVER_ADVOCATE": 2
+  },
+  "afterHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+  "afterDeterministic": {
+    "facts": {
+      "analysisType": "route_deviation",
+      "expectedRouteDistanceKm": 11.5,
+      "actualRouteDistanceKm": 14.7,
+      "distanceDifferenceKm": 3.2,
+      "deviationPercentage": 27.83,
+      "expectedTripDurationMinutes": 18.0,
+      "actualTripDurationMinutes": 22.0,
+      "durationDifferenceMinutes": 4.0,
+      "expectedFare": 15.8,
+      "actualFare": 20.1,
+      "fareDifference": 4.3,
+      "explainedDeviationDistanceKm": 3.2,
+      "unexplainedDeviationDistanceKm": 0.0,
+      "conditions": [
+        {
+          "type": "road_closure",
+          "explainedDistanceKm": 3.2,
+          "evidenceIds": [
+            "E06"
+          ]
+        }
+      ],
+      "requiredEvidenceIds": [
+        "E03",
+        "E04",
+        "E05"
+      ],
+      "missingEvidenceIds": [],
+      "contradictoryEvidence": false,
+      "supportingEvidenceIds": [
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ]
+    },
+    "policyEvaluation": {
+      "policyId": "ROUTE_DEVIATION_POLICY_V1",
+      "policyVersion": "1.0.0-prototype",
+      "evaluatedRules": [
+        {
+          "ruleId": "ROUTE_REQUIRED_EVIDENCE",
+          "description": "Required route, deviation, and fare evidence must be present.",
+          "passed": true,
+          "actualValue": 3,
+          "requiredValue": 3,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05"
+          ]
+        },
+        {
+          "ruleId": "ROUTE_UNEXPLAINED_DEVIATION",
+          "description": "Unexplained route deviation must meet the prototype adjustment threshold.",
+          "passed": false,
+          "actualValue": 0.0,
+          "requiredValue": 0.25,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05",
+            "E06"
+          ]
+        },
+        {
+          "ruleId": "ROUTE_EVIDENCE_CONSISTENCY",
+          "description": "Critical route evidence must not be contradictory.",
+          "passed": true,
+          "actualValue": false,
+          "requiredValue": false,
+          "evidenceIds": [
+            "E03",
+            "E04",
+            "E05"
+          ]
+        }
+      ],
+      "passedRules": [
+        "ROUTE_REQUIRED_EVIDENCE",
+        "ROUTE_EVIDENCE_CONSISTENCY"
+      ],
+      "failedRules": [
+        "ROUTE_UNEXPLAINED_DEVIATION"
+      ],
+      "supportingEvidenceIds": [
+        "E03",
+        "E04",
+        "E05",
+        "E06"
+      ],
+      "overallOutcome": "NO_ELIGIBLE_UNEXPLAINED_DEVIATION"
+    },
+    "ruling": "No refund recommended",
+    "recommendedAction": "NO_REFUND",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "confidence": 0.95,
+    "resolutionMode": "AUTO_RESOLVE",
+    "escalationReasons": []
+  },
+  "deterministicUnchanged": true,
+  "caseFixtureUnchanged": true,
+  "deterministicChanges": {},
+  "pipeline": [
+    {
+      "stage": "CASE_RECEIVED",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "EVIDENCE_VALIDATED",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "DETERMINISTIC_ANALYSIS",
+      "status": "COMPLETE"
+    },
+    {
+      "stage": "RIDER_ADVOCATE",
+      "status": "FAILED"
+    },
+    {
+      "stage": "DRIVER_ADVOCATE",
+      "status": "FAILED"
+    },
+    {
+      "stage": "CLAIM_VERIFICATION",
+      "status": "FAILED"
+    },
+    {
+      "stage": "RIDER_REBUTTAL",
+      "status": "NOT_RUN"
+    },
+    {
+      "stage": "DRIVER_REBUTTAL",
+      "status": "NOT_RUN"
+    },
+    {
+      "stage": "REBUTTAL_VERIFICATION",
+      "status": "NOT_RUN"
+    },
+    {
+      "stage": "JUDGE",
+      "status": "NOT_RUN"
+    }
+  ],
+  "replayMetadata": {
+    "mode": "NONE",
+    "replayed": false,
+    "advocatesReplayed": false,
+    "rebuttalsReplayed": false,
+    "judgeReplayed": false,
+    "valid": true,
+    "reasonCodes": [],
+    "currentAnalysisHash": "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407",
+    "artifactAnalysisHash": null,
+    "artifactCreatedAt": null,
+    "artifactVersion": null,
+    "capturedProvider": null,
+    "capturedModel": null,
+    "note": "All AI stages ran against the configured provider in this request."
+  },
+  "auditEvents": [
+    "REBUTTALS_NOT_RUN",
+    "REPLAY_ARTIFACT_WRITTEN",
+    "JUDGE_NOT_RUN"
+  ],
+  "stages": {
+    "RIDER_ADVOCATE": {
+      "status": "FAILED",
+      "provider": "openai_compatible",
+      "model": "gemini-3.8-flash",
+      "latencyMs": 4991,
+      "attemptCount": 2,
+      "retryCount": 1,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "generatedClaimCount": 0,
+      "verifiedClaimCount": 0,
+      "rejectedClaimCount": 0,
+      "verificationRate": null,
+      "rejectionReasons": [],
+      "malformedOutput": false,
+      "failureCode": "SERVER_ERROR",
+      "failureReason": "Agent provider unavailable (openai_compatible: SERVER_ERROR). The case analysis is unaffected.",
+      "structuredOutputValid": false,
+      "requestedOutcome": null,
+      "contextAcknowledged": false,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "warnings": [],
+      "rejectedClaims": [],
+      "verifiedClaimIds": []
+    },
+    "DRIVER_ADVOCATE": {
+      "status": "FAILED",
+      "provider": "openai_compatible",
+      "model": "gemini-3.8-flash",
+      "latencyMs": 4357,
+      "attemptCount": 2,
+      "retryCount": 1,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "generatedClaimCount": 0,
+      "verifiedClaimCount": 0,
+      "rejectedClaimCount": 0,
+      "verificationRate": null,
+      "rejectionReasons": [],
+      "malformedOutput": false,
+      "failureCode": "SERVER_ERROR",
+      "failureReason": "Agent provider unavailable (openai_compatible: SERVER_ERROR). The case analysis is unaffected.",
+      "structuredOutputValid": false,
+      "requestedOutcome": null,
+      "contextAcknowledged": false,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "warnings": [],
+      "rejectedClaims": [],
+      "verifiedClaimIds": []
+    },
+    "RIDER_REBUTTAL": {
+      "status": "NOT_RUN",
+      "provider": null,
+      "model": null,
+      "latencyMs": null,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "responsesGenerated": 0,
+      "responsesVerified": 0,
+      "responsesRejected": 0,
+      "verificationRate": null,
+      "stances": {},
+      "targetClaimIds": [],
+      "verifiedRebuttalIds": [],
+      "rejectionReasons": [],
+      "rejected": [],
+      "invalidTargetIds": 0,
+      "ownSideTargets": 0,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "inventedMonetaryValues": 0,
+      "concededTargetIds": [],
+      "failureReason": "Rebuttal did not run: RIDER and DRIVER did not produce an initial argument, so there is no verified case to cross-examine.",
+      "structuredOutputValid": false
+    },
+    "DRIVER_REBUTTAL": {
+      "status": "NOT_RUN",
+      "provider": null,
+      "model": null,
+      "latencyMs": null,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "responsesGenerated": 0,
+      "responsesVerified": 0,
+      "responsesRejected": 0,
+      "verificationRate": null,
+      "stances": {},
+      "targetClaimIds": [],
+      "verifiedRebuttalIds": [],
+      "rejectionReasons": [],
+      "rejected": [],
+      "invalidTargetIds": 0,
+      "ownSideTargets": 0,
+      "invalidEvidenceRefs": 0,
+      "invalidPolicyRefs": 0,
+      "factContradictions": 0,
+      "unknownFacts": 0,
+      "inventedMonetaryValues": 0,
+      "concededTargetIds": [],
+      "failureReason": "Rebuttal did not run: RIDER and DRIVER did not produce an initial argument, so there is no verified case to cross-examine.",
+      "structuredOutputValid": false
+    },
+    "JUDGE": {
+      "status": "NOT_RUN",
+      "executable": false,
+      "skipReason": "ADVOCATE_INPUT_INCOMPLETE",
+      "recommendedOutcome": null,
+      "provider": null,
+      "model": null,
+      "latencyMs": null,
+      "attemptCount": null,
+      "retryCount": null,
+      "inputTokens": null,
+      "outputTokens": null,
+      "totalTokens": null,
+      "unattributedTokens": null,
+      "acceptedRiderClaimIds": [],
+      "acceptedDriverClaimIds": [],
+      "rejectedRiderClaimIds": [],
+      "rejectedDriverClaimIds": [],
+      "consideredRiderRebuttalIds": [],
+      "consideredDriverRebuttalIds": [],
+      "evidenceIds": [],
+      "policyRuleIds": [],
+      "reasoningSummary": "",
+      "uncertainties": [],
+      "requiresHumanReview": false,
+      "failureReason": "Judge did not run: RIDER and DRIVER did not produce an argument. Deciding a dispute with one side absent would misrepresent the record.",
+      "validationResult": "VALID",
+      "validationIssues": [],
+      "failureCode": null,
+      "failureCategory": null
+    }
+  },
+  "deterministicResolution": {
+    "ruling": "No refund recommended",
+    "recommendedAction": "NO_REFUND",
+    "refundAmount": 0.0,
+    "currency": "SGD",
+    "resolutionMode": "AUTO_RESOLVE",
+    "confidence": 0.95,
+    "escalationReasons": [],
+    "explanation": "All measured route deviation is explained by verified structured conditions or is below the prototype threshold.",
+    "counterfactualExplanation": "An additional verified unexplained route segment above the prototype threshold would create an adjustment recommendation."
+  },
+  "authoritativeMatchesBaseline": true,
+  "trustBoundaries": {
+    "rejectedClaimsExcludedFromContext": true,
+    "rejectedClaimIds": [],
+    "contextClaimIds": [],
+    "contextHoldsExactlyVerifiedClaims": true,
+    "contextUnexpectedClaimIds": [],
+    "contextMissingClaimIds": [],
+    "rejectedRebuttalsExcludedFromContext": true,
+    "contextHoldsExactlyVerifiedRebuttals": true,
+    "judgeCitedOnlyVerifiedClaims": true,
+    "judgeCitedUnknownClaimIds": [],
+    "judgeCitedOnlyVerifiedRebuttals": true,
+    "judgeCitedUnknownRebuttalIds": [],
+    "judgeCitedOnlyValidEvidence": true,
+    "judgeCitedUnknownEvidenceIds": [],
+    "judgeCitedOnlyApplicablePolicy": true,
+    "judgeCitedUnknownPolicyIds": [],
+    "contextRiderVerifiedCount": 0,
+    "contextDriverVerifiedCount": 0,
+    "contextRiderRebuttalCount": 0,
+    "contextDriverRebuttalCount": 0,
+    "judgeContextTrustedHash": "f5d6592e2b10cf604f440e9e71a33c1301989c27c324dd824dc202031fe79b66"
+  },
+  "artifacts": {
+    "ADVOCATES": {
+      "written": true,
+      "bytes": 4446,
+      "forbiddenKeys": [],
+      "forbiddenValues": []
+    },
+    "REBUTTALS": {
+      "written": true,
+      "bytes": 1209,
+      "forbiddenKeys": [],
+      "forbiddenValues": []
+    },
+    "JUDGE": {
+      "written": true,
+      "bytes": 1810,
+      "forbiddenKeys": [],
+      "forbiddenValues": []
+    }
+  }
+}

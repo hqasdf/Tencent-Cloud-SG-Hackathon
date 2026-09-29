@@ -1,0 +1,128 @@
+{
+  "caseId": "DISP-002",
+  "createdAt": "2026-09-29T15:23:04.819531+00:00",
+  "deterministicAnalysisHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+  "disputeType": "no_show_charge",
+  "model": "gemini-3.8-flash",
+  "payload": {
+    "driver": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "D1"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "WITHIN_PICKUP_RADIUS",
+                "value": true
+              },
+              {
+                "fact": "WAITING_DURATION_SECONDS",
+                "value": 480
+              }
+            ],
+            "claim": "The driver arrived 0.0 m from the pickup point, inside the required radius, and waited 480 seconds.",
+            "claimId": "D1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E02",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "NO_SHOW_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "The trusted arrival and waiting measurements decide the no-show rule."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "UPHOLD_CHARGE",
+        "side": "DRIVER",
+        "summary": "The driver relies on the recorded arrival inside the pickup radius and the waiting duration."
+      },
+      "side": "DRIVER"
+    },
+    "rider": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "R1"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "output": {
+        "claims": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "WAITING_DURATION_SECONDS",
+                "value": 480
+              },
+              {
+                "fact": "DRIVER_PICKUP_DISTANCE_METERS",
+                "value": 0.0
+              }
+            ],
+            "claim": "The driver was 0.0 m from the pickup point and waited 480 seconds.",
+            "claimId": "R1",
+            "disputedEvidenceIds": [],
+            "evidenceIds": [
+              "E02",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "importance": "HIGH",
+            "policyRefs": [
+              "NO_SHOW_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "If the arrival or waiting threshold is not met, the cancellation charge is not justified."
+          }
+        ],
+        "contextAcknowledged": true,
+        "requestedOutcome": "UPHOLD_CHARGE",
+        "side": "RIDER",
+        "summary": "The rider questions whether the arrival and waiting record justifies the charge."
+      },
+      "side": "RIDER"
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage4-v1",
+  "stage": "ADVOCATES",
+  "trustedContextHash": "a808a5b2033bb21bc7b7527023b2683272f1eda78f9ec3b2f5c7ce32dc7379bc"
+}

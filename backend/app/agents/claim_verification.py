@@ -270,8 +270,14 @@ def _mentions_numbers(text: str) -> bool:
     return any(character.isdigit() for character in text)
 
 
-def _trusted_facts(context: AgentCaseContext) -> dict[str, object]:
-    facts = context.facts
+def fact_values(facts: object) -> dict[str, object]:
+    """The authoritative fact values for one dispute type, keyed by fact name.
+
+    Takes the facts object directly rather than a context, because Stage 6's
+    rebuttal context exposes the same facts under a different attribute name.
+    Both must resolve to *this* mapping: a second definition of "the truth"
+    would be free to drift from this one.
+    """
     if isinstance(facts, RouteDeviationFacts):
         return {name: getattr(facts, key) for name, key in ROUTE_FACT_KEYS.items()}
     if isinstance(facts, NoShowFacts):
@@ -279,8 +285,18 @@ def _trusted_facts(context: AgentCaseContext) -> dict[str, object]:
     return {}
 
 
-def _values_match(expected: object, actual: object) -> bool:
-    """Deterministic comparison with a small tolerance for floats."""
+def trusted_facts(context: AgentCaseContext) -> dict[str, object]:
+    """``fact_values`` for an advocate context."""
+    return fact_values(context.facts)
+
+
+def values_match(expected: object, actual: object) -> bool:
+    """Deterministic comparison with a small tolerance for floats.
+
+    Public for the same reason as ``trusted_facts``: Stage 6 must apply the
+    identical comparison, including the bool-vs-number distinction, or a
+    rebuttal could assert something a claim could not.
+    """
     if isinstance(expected, bool) or isinstance(actual, bool):
         if isinstance(expected, bool) != isinstance(actual, bool):
             return False
@@ -288,3 +304,9 @@ def _values_match(expected: object, actual: object) -> bool:
     if isinstance(expected, (int, float)) and isinstance(actual, (int, float)):
         return abs(float(expected) - float(actual)) <= FLOAT_TOLERANCE
     return expected == actual
+
+
+# Retained under the original private names: the internal call sites read
+# naturally that way, and any external reference keeps working.
+_trusted_facts = trusted_facts
+_values_match = values_match

@@ -840,15 +840,30 @@ def test_resolution_endpoint_rejects_an_unknown_case() -> None:
 
 
 def test_audit_trail_records_the_full_success_sequence() -> None:
+    """The Judge events appear in order, after the Stage 6 rebuttal events.
+
+    Stage 6 inserted the rebuttal layer ahead of the Judge, so this asserts the
+    Judge's own four events as an ordered subsequence and pins the full pipeline
+    order separately. Asserting the exact whole list here would make every future
+    stage break a Stage 5 test for no reason.
+    """
     result = _run_with_judge(ROUTE_CASE, judge_payload_factory=lambda c: _valid_payload(c))
     names = [event.event for event in result.audit]
 
-    assert names == [
+    judge_events = [
         JUDGE_CONTEXT_BUILT,
         JUDGE_STARTED,
         JUDGE_COMPLETED,
         JUDGE_OUTPUT_VALIDATED,
     ]
+    positions = [names.index(event) for event in judge_events]
+    assert positions == sorted(positions), f"Judge events out of order: {names}"
+
+    # The rebuttal layer ran before the Judge and recorded its own events.
+    assert names.index("REBUTTAL_CONTEXT_BUILT") < names.index(JUDGE_CONTEXT_BUILT)
+    assert "RIDER_REBUTTAL_COMPLETED" in names
+    assert "DRIVER_REBUTTAL_COMPLETED" in names
+
     for event in result.audit:
         assert event.timestamp
 

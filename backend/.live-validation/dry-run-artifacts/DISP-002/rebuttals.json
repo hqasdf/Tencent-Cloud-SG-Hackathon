@@ -1,0 +1,118 @@
+{
+  "caseId": "DISP-002",
+  "createdAt": "2026-09-29T15:23:04.823192+00:00",
+  "deterministicAnalysisHash": "1e4b88382660d25c4ff10cc0c6c384e55034e110ebf40887e277806b466a6a70",
+  "disputeType": "no_show_charge",
+  "model": null,
+  "payload": {
+    "driver": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "DRIVER-RB1|RIDER-R1|CHALLENGE"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "failure_reason": null,
+      "output": {
+        "concessions": [],
+        "overallSummary": "1 of the opposing side's verified claims were addressed: one is challenged as insufficient to support the outcome sought, and the remainder are accepted as accurate statements of the trusted record.",
+        "responses": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "WAITING_DURATION_SECONDS",
+                "value": 480
+              }
+            ],
+            "evidenceIds": [
+              "E02",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "policyRuleIds": [
+              "NO_SHOW_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "This states a measured value accurately, but a measurement on its own does not establish the outcome that DRIVER is asking the decision to reach.",
+            "stance": "CHALLENGE",
+            "targetClaimId": "RIDER-R1"
+          }
+        ],
+        "side": "DRIVER"
+      },
+      "side": "DRIVER",
+      "status": "COMPLETE"
+    },
+    "rider": {
+      "capturedVerification": {
+        "rejected": [],
+        "verifiedSignatures": [
+          "RIDER-RB1|DRIVER-D1|CHALLENGE"
+        ]
+      },
+      "execution": {
+        "durationMs": 0,
+        "failureCode": null,
+        "generatedClaimCount": 1,
+        "inputTokens": null,
+        "malformedOutput": false,
+        "model": null,
+        "outputTokens": null,
+        "provider": "mock",
+        "rejectedClaimCount": 0,
+        "rejectionReasons": [],
+        "totalTokens": null,
+        "verifiedClaimCount": 1
+      },
+      "failure_reason": null,
+      "output": {
+        "concessions": [],
+        "overallSummary": "1 of the opposing side's verified claims were addressed: one is challenged as insufficient to support the outcome sought, and the remainder are accepted as accurate statements of the trusted record.",
+        "responses": [
+          {
+            "assertedFacts": [
+              {
+                "fact": "WITHIN_PICKUP_RADIUS",
+                "value": true
+              }
+            ],
+            "evidenceIds": [
+              "E02",
+              "E04",
+              "E05",
+              "E06"
+            ],
+            "policyRuleIds": [
+              "NO_SHOW_REQUIRED_EVIDENCE"
+            ],
+            "reasoningSummary": "This states a measured value accurately, but a measurement on its own does not establish the outcome that RIDER is asking the decision to reach.",
+            "stance": "CHALLENGE",
+            "targetClaimId": "DRIVER-D1"
+          }
+        ],
+        "side": "RIDER"
+      },
+      "side": "RIDER",
+      "status": "COMPLETE"
+    }
+  },
+  "provider": "mock",
+  "replayVersion": "1",
+  "schemaVersion": "stage6-v1",
+  "stage": "REBUTTALS",
+  "trustedContextHash": "a808a5b2033bb21bc7b7527023b2683272f1eda78f9ec3b2f5c7ce32dc7379bc"
+}
