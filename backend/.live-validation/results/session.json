@@ -1,11 +1,11 @@
 {
-  "startedAt": "2026-09-29T15:29:57.305441+00:00",
+  "startedAt": "2026-09-30T13:51:34.496732+00:00",
   "offline": false,
   "provider": "openai_compatible",
   "model": "gemini-3.8-flash",
   "mode": "real",
   "maxRetriesForSession": 1,
-  "budgetAtStart": 4,
+  "budgetAtStart": 8,
   "cases": [
     {
       "caseId": "DISP-005",
@@ -22,9 +22,9 @@
   ],
   "stoppedEarly": "RIDER_ADVOCATE failed with SERVER_ERROR",
   "logicalModelCalls": 2,
-  "finishedAt": "2026-09-29T15:30:06.683053+00:00",
+  "finishedAt": "2026-09-30T13:54:41.374906+00:00",
   "actualHttpAttempts": 4,
   "retries": 2,
   "rateLimited": false,
-  "serverErrors": 8
+  "serverErrors": 9
 }

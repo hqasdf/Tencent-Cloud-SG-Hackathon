@@ -78,8 +78,13 @@ SESSION_MAX_RETRIES = 1
 
 # Failure codes that mean "stop the whole session", per the brief's provider
 # failure rules. A 503 gets one bounded retry; a second one is capacity gone.
+# A 429 without Retry-After is never retried and stops at once. A timeout or a
+# network error gets one bounded retry, and stops the session if it recurs --
+# otherwise the orchestrator would keep walking the pipeline and spending
+# attempts against a transport that is not working.
 STOP_CODES = frozenset({"RATE_LIMITED", "SERVER_ERROR", "AUTHENTICATION_FAILED",
-                        "ACCESS_DENIED", "MODEL_NOT_FOUND", "NOT_CONFIGURED"})
+                        "ACCESS_DENIED", "MODEL_NOT_FOUND", "NOT_CONFIGURED",
+                        "TIMEOUT", "NETWORK_ERROR"})
 
 
 class LiveBudgetExhausted(BaseException):
@@ -493,17 +498,32 @@ def _verify_trust_boundaries(result, case, analysis) -> dict:  # noqa: ANN001
     }
 
 
-def _scan_artifacts(case_id: str) -> dict:
-    """Re-check the written artefacts for anything that must never be persisted."""
+def _scan_artifacts(case_id: str, *, since: str) -> dict:
+    """Re-check the artefacts for anything that must never be persisted.
+
+    An artefact file on disk is not necessarily *this* run's output. The store is
+    keyed by (case, stage) and a failed stage writes nothing, so a previous
+    capture survives untouched -- including one captured from the mock provider
+    whose hashes still match an unchanged fixture. Reporting such a file as
+    "written" would overstate what this run produced, so freshness is recorded
+    explicitly. ``writtenByThisRun`` is the field to trust, not ``written``.
+    """
     found: dict[str, object] = {}
     for stage, filename in (("ADVOCATES", "advocates.json"), ("REBUTTALS", "rebuttals.json"), ("JUDGE", "judge.json")):
         path = ARTIFACT_ROOT / case_id / filename
         if not path.is_file():
-            found[stage] = {"written": False}
+            found[stage] = {"written": False, "writtenByThisRun": False}
             continue
         document = json.loads(path.read_text(encoding="utf-8"))
+        created_at = document.get("createdAt")
         found[stage] = {
             "written": True,
+            "writtenByThisRun": bool(created_at) and created_at >= since,
+            "artifactCreatedAt": created_at,
+            "capturedProvider": document.get("provider"),
+            "fileMtime": datetime.fromtimestamp(
+                path.stat().st_mtime, tz=timezone.utc
+            ).isoformat(),
             "bytes": path.stat().st_size,
             "forbiddenKeys": forbidden_keys_in(document),
             "forbiddenValues": forbidden_values_in(document),
@@ -560,6 +580,7 @@ def run_case(
 
     attempts_before = ledger.count
     started = time.monotonic()
+    run_started_at = _now()
     error: str | None = None
     result = None
     try:
@@ -611,7 +632,7 @@ def run_case(
     if result is None:
         report["stages"] = None
         report["trustBoundaries"] = None
-        report["artifacts"] = _scan_artifacts(case_id)
+        report["artifacts"] = _scan_artifacts(case_id, since=run_started_at)
         return report
 
     report["pipeline"] = [
