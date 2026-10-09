@@ -32,3 +32,40 @@ _gen*.ps1
 _psw.ps1
 _writefile.py
 _write_intake.py
+
+# Local browser profiles and UI diagnostics (never commit session data).
+/.bp-*/
+/.browser-profile*/
+/.ui-test/
+/.ui-test-shots/
+/playwright-report/
+/test-results/
+**/playwright/.auth/
+
+# Local live-validation probes, credentials, transcripts, and generated results.
+/backend/.live-validation/
+/.workbuddy-ai/memory/
+
+# Environment variants and local credentials; retain shareable examples.
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+credentials.json
+credentials.local.*
+service-account*.json
+service_account*.json
+application_default_credentials.json
+*.pem
+*.key
+
+# Generated caches and temporary diagnostics.
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.vite/
+*.tmp
+*.temp
+*.bak
+*.db-wal
+*.db-shm
