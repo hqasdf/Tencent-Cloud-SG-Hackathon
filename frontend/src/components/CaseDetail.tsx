@@ -9,6 +9,8 @@ import { ReplayBadge, ReplayInvalidBadge } from "./ReplayBadge";
 import { AuditTrail, DeterministicOutcomePanel, JudgeAdvisoryPanel } from "./JudgePanel";
 import { DeterministicAnalysisPanel } from "./DeterministicAnalysis";
 import { StepPending, WorkflowRail, WorkflowStep, type StepState } from "./WorkflowStep";
+import { bothSettledOk, isSettledNotOk, isSettledOk } from "../types/workflow";
+import type { SideStages, StageState } from "../types/workflow";
 import { labelize, money } from "../utils/format";
 
 /**
@@ -126,15 +128,83 @@ export function CaseDetail({
   }, [resolutionRun]);
 
   const hasArguments = resolutionRun !== null || advocateRun !== null;
-  const advocatesOnly = resolutionRun === null && advocateRun !== null;
 
-  function stateFor(index: number): StepState {
-    if (index <= 3) return "done";
-    if (index === FIRST_LIVE_STEP) return hasArguments ? "done" : "ready";
-    return resolutionRun ? "done" : "waiting";
+  /**
+   * The backend's own verdict on each stage. When it is present it is the only
+   * input to step state — the UI does not infer anything from the fact that a
+   * response object exists.
+   */
+  const workflow = resolutionRun?.workflow ?? null;
+  const aiIncomplete = workflow !== null && !bothSettledOk(workflow.advocates);
+
+  /**
+   * One stage's status, as the backend reported it.
+   *
+   * `PENDING_HUMAN_REVIEW` is "done": the stage ran, and code decided a human
+   * must sign off. `BLOCKED` and `SKIPPED` are not "failed" — nothing was
+   * attempted, so the fault is upstream and the wording must not imply that
+   * this stage went wrong.
+   */
+  function fromStage(state: StageState | undefined, fallback: StepState): StepState {
+    if (!state) return fallback;
+    switch (state.status) {
+      case "COMPLETE":
+      case "PENDING_HUMAN_REVIEW":
+        return "done";
+      case "FAILED":
+        return "failed";
+      case "BLOCKED":
+      case "SKIPPED":
+        return "blocked";
+      default:
+        return "waiting";
+    }
   }
 
-  const doneCount = STEPS.filter((_, position) => stateFor(position + 1) === "done").length;
+  /** A paired stage counts as done only when BOTH sides produced a result. */
+  function fromPair(sides: SideStages | undefined, fallback: StepState): StepState {
+    if (!sides) return fallback;
+    if (sides.rider.status === "FAILED" || sides.driver.status === "FAILED") return "failed";
+    if (isSettledNotOk(sides.rider) || isSettledNotOk(sides.driver)) return "blocked";
+    if (isSettledOk(sides.rider) && isSettledOk(sides.driver)) return "done";
+    return "waiting";
+  }
+
+  function stateFor(index: number): StepState {
+    // Steps 1 and 2 are the case record itself. If it had failed to load there
+    // would be no page to render, so reaching here means they are complete.
+    if (index === 1 || index === 2) return "done";
+    if (index === 3) return fromStage(workflow?.deterministic, "done");
+    if (index === 4) {
+      return workflow ? fromPair(workflow.advocates, "ready") : hasArguments ? "done" : "ready";
+    }
+    // Without a state machine there is no evidence that a later stage ran, so
+    // the honest answer is "not run" rather than the optimistic "done".
+    if (!workflow) return "waiting";
+    if (index === 5) return fromPair(workflow.rebuttals, "waiting");
+    if (index === 6) return fromStage(workflow.judge, "waiting");
+    if (index === 7) return fromStage(workflow.finalResolution, "waiting");
+    return fromStage(workflow.explanation, "waiting");
+  }
+
+  const stepStates = STEPS.map((_, position) => stateFor(position + 1));
+  const doneCount = stepStates.filter((state) => state === "done").length;
+  const failedCount = stepStates.filter((state) => state === "failed").length;
+  const blockedCount = stepStates.filter((state) => state === "blocked").length;
+
+  /**
+   * Pill text for the two steps whose label describes a condition, not a state.
+   *
+   * Both are only true while that condition holds. "Start here" is an
+   * invitation to run, so it belongs only to a step that is genuinely ready.
+   * "Advisory" describes a recommendation that exists, so it must not outlive
+   * one. When either step is blocked, failed or not run, the state's own label
+   * has to win — otherwise the pill contradicts the rail chip beside it and the
+   * body underneath it, which is exactly the "the UI says DONE when the backend
+   * says BLOCKED" failure the state machine exists to prevent.
+   */
+  const startLabel = stateFor(4) === "ready" ? "Start here" : undefined;
+  const judgeLabel = stateFor(6) === "done" ? "Advisory" : undefined;
   const statusTone =
     caseData.status === "Auto Resolved" ? "auto" : caseData.status === "Human Review" ? "review" : "neutral";
 
@@ -157,8 +227,20 @@ export function CaseDetail({
       <section className="workflow-toolbar">
         <div className="workflow-toolbar-left">
           <strong>Dispute workflow</strong>
+          {/*
+            The count reflects what the backend said actually happened. It used
+            to read "N of 8 steps ready" and count any step with a response
+            object behind it, which reported 8 of 8 for a run in which the
+            advocates failed and the Judge never ran.
+          */}
           <span className="workflow-progress">
-            <b>{doneCount}</b> of {TOTAL_STEPS} steps ready
+            <b>{doneCount}</b> of {TOTAL_STEPS} steps complete
+            {failedCount > 0 && (
+              <em className="workflow-flag failed">{failedCount} failed</em>
+            )}
+            {blockedCount > 0 && (
+              <em className="workflow-flag blocked">{blockedCount} blocked</em>
+            )}
           </span>
         </div>
         <div className="workflow-toolbar-actions">
@@ -206,6 +288,20 @@ export function CaseDetail({
 
       {(resolutionError || advocateError) && (
         <p className="workflow-alert">{resolutionError ?? advocateError}</p>
+      )}
+
+      {/*
+        One plain-language statement of what the AI half of the pipeline could
+        not do. Without it, an operator reading a case whose advocates failed
+        sees an empty arguments panel and an empty Judge panel and has to infer
+        the cause from two separate step bodies.
+      */}
+      {aiIncomplete && (
+        <p className="workflow-notice" role="status">
+          <b>The AI stages did not complete for this case.</b> Cross-examination and the
+          Judge&rsquo;s view could not run, so there is no AI recommendation. The decision and
+          the explanation below are calculated by code and are unaffected.
+        </p>
       )}
 
       <WorkflowRail steps={STEPS} stateFor={stateFor} current={openStep} onSelect={setOpenStep} />
@@ -350,7 +446,7 @@ export function CaseDetail({
           title={STEPS[3].title}
           summary={STEPS[3].summary}
           state={stateFor(4)}
-          stateLabel={hasArguments ? undefined : "Start here"}
+          stateLabel={startLabel}
           open={openStep === 4}
           onToggle={() => toggle(4)}
           onPrev={() => setOpenStep(3)}
@@ -413,7 +509,7 @@ export function CaseDetail({
           title={STEPS[5].title}
           summary={STEPS[5].summary}
           state={stateFor(6)}
-          stateLabel={resolutionRun ? "Advisory" : undefined}
+          stateLabel={judgeLabel}
           open={openStep === 6}
           onToggle={() => toggle(6)}
           onPrev={() => setOpenStep(5)}

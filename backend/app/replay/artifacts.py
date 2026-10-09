@@ -30,7 +30,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 from app.models.advocate import AdvocateOutput
 from app.models.agent import AdvocateSide, AgentCallMetadata
@@ -181,11 +181,19 @@ class StoredJudgePayload(ReplayModel):
 class ReplayArtifactBase(ReplayModel):
     """The metadata every artefact carries.
 
-    ``provider`` and ``model`` are recorded for observability only. They are
-    deliberately **not** part of replay validity: an artefact is validated by
-    re-running current deterministic code over it, so a model swap does not make
-    a stored argument untrustworthy — it makes it old. The frontend is told which
-    it is through ``ReplayMetadata`` rather than being left to assume.
+    ``captured_mode``, ``captured_provider`` and ``captured_model`` record how the
+    output was produced. They are deliberately **not** part of replay validity: an
+    artefact is validated by re-running current deterministic code over it, so a
+    model swap does not make a stored argument untrustworthy — it makes it old.
+    The frontend is told which it is through ``ReplayMetadata`` rather than being
+    left to assume.
+
+    They *are* the test for **live eligibility**. An artefact may be replayed
+    without all three — a mock capture is a perfectly valid artefact — but it may
+    only be *reported as live output* when all three are present. Without that
+    rule a mock capture, or a capture whose provider was never recorded, could be
+    presented as evidence of what the model actually said. ``is_live_eligible``
+    is the single place that question is answered.
     """
 
     replay_version: str = Field(
@@ -209,8 +217,46 @@ class ReplayArtifactBase(ReplayModel):
         serialization_alias="trustedContextHash",
         validation_alias="trustedContextHash",
     )
-    provider: str = ""
-    model: str | None = None
+    captured_mode: str | None = Field(
+        default=None,
+        serialization_alias="capturedMode",
+        validation_alias=AliasChoices("capturedMode", "mode"),
+    )
+    captured_provider: str = Field(
+        default="",
+        serialization_alias="capturedProvider",
+        validation_alias=AliasChoices("capturedProvider", "provider"),
+    )
+    captured_model: str | None = Field(
+        default=None,
+        serialization_alias="capturedModel",
+        validation_alias=AliasChoices("capturedModel", "model"),
+    )
+
+    # Read-only aliases for the pre-``captured*`` names. Kept so existing callers
+    # and artefacts written before this field set keep working unchanged.
+    @property
+    def provider(self) -> str:
+        return self.captured_provider
+
+    @property
+    def model(self) -> str | None:
+        return self.captured_model
+
+    @property
+    def is_live_eligible(self) -> bool:
+        """May this capture be reported as live model output?
+
+        All three must be present. ``captured_mode`` must be ``"real"`` — a mock
+        capture is a valid artefact but is never live evidence. A blank provider
+        or a missing model means the capture cannot name what produced it, which
+        is exactly the case that must not be dressed up as live.
+        """
+        return (
+            self.captured_mode == "real"
+            and bool(self.captured_provider)
+            and bool(self.captured_model)
+        )
 
 
 class AdvocateArtifact(ReplayArtifactBase):
@@ -221,6 +267,20 @@ class AdvocateArtifact(ReplayArtifactBase):
 class RebuttalArtifact(ReplayArtifactBase):
     stage: Literal["REBUTTALS"] = "REBUTTALS"
     payload: StoredRebuttalPayload
+
+    @property
+    def is_live_eligible(self) -> bool:
+        """A provenance-complete capture is not proof both rebuttals succeeded.
+
+        Failure is intentionally storable for replay/audit, but an artefact with
+        either side FAILED or NOT_RUN is not a successful *live stage* and must
+        not be advertised as one. COMPLETE also requires the raw output that the
+        current validator can check on replay.
+        """
+        return super().is_live_eligible and all(
+            side.status == "COMPLETE" and side.output is not None
+            for side in (self.payload.rider, self.payload.driver)
+        )
 
 
 class JudgeArtifact(ReplayArtifactBase):

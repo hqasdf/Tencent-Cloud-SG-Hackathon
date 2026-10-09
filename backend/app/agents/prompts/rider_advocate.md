@@ -33,11 +33,11 @@ Set `requestedOutcome` to the outcome the rider would seek — for example
 `PARTIAL_REFUND`, `FULL_REFUND`, or `REFUND_CHARGE`. Never state a refund amount.
 
 Use `assertedFacts` for any measured value you quote, so it can be verified
-against the trusted calculation. For example:
-
-```json
-{"fact": "DEVIATION_PERCENTAGE", "value": 22.41}
-```
+against the trusted calculation. Each entry is an object with a `fact` name and
+the `value` you are quoting, for example `{"fact": "DEVIATION_PERCENTAGE",
+"value": 22.41}`. The example is shown inline rather than in a code fence on
+purpose: the output contract forbids Markdown, and a fenced example invites the
+model to fence its own answer.
 
 Allowed fact names: `EXPECTED_DISTANCE_KM`, `ACTUAL_DISTANCE_KM`,
 `DISTANCE_DIFFERENCE_KM`, `DEVIATION_PERCENTAGE`, `EXPECTED_DURATION_MINUTES`,

@@ -22,13 +22,17 @@ import type { ReactNode } from "react";
  *    nothing to continue to.
  */
 
-export type StepState = "done" | "ready" | "waiting" | "blocked";
+export type StepState = "done" | "ready" | "waiting" | "blocked" | "failed";
 
 const STATE_LABEL: Record<StepState, string> = {
   done: "Done",
   ready: "Next",
   waiting: "Not run",
-  blocked: "Blocked"
+  // Two different situations, deliberately not collapsed into one word:
+  // "failed" means this stage ran and went wrong; "blocked" means it never ran
+  // because something it depends on failed, so the fault is upstream.
+  blocked: "Blocked",
+  failed: "Failed"
 };
 
 export interface WorkflowStepProps {
@@ -133,9 +137,13 @@ export function WorkflowRail({ steps, stateFor, current, onSelect }: WorkflowRai
             className={`rail-chip ${state} ${current === index ? "current" : ""}`}
             onClick={() => onSelect(index)}
             aria-current={current === index ? "step" : undefined}
-            title={step.title}
+            title={`${step.title} — ${STATE_LABEL[state]}`}
           >
-            <i aria-hidden="true">{state === "done" ? "✓" : index}</i>
+            {/*
+              The marker is text, not colour, and the title carries the state in
+              words — colour alone is lost to colour-blindness and greyscale.
+            */}
+            <i aria-hidden="true">{RAIL_MARK[state] ?? index}</i>
             {step.short}
           </button>
         );
@@ -143,6 +151,12 @@ export function WorkflowRail({ steps, stateFor, current, onSelect }: WorkflowRai
     </nav>
   );
 }
+
+const RAIL_MARK: Partial<Record<StepState, string>> = {
+  done: "✓",
+  failed: "!",
+  blocked: "–"
+};
 
 /** Placeholder shown inside a step that cannot run yet. */
 export function StepPending({ title, children }: { title: string; children: ReactNode }) {

@@ -60,7 +60,7 @@ application_default_credentials.json
 *.key
 
 # Generated caches and temporary diagnostics.
-*.py[cod]
+*.py[co]
 .mypy_cache/
 .ruff_cache/
 .vite/

@@ -7,6 +7,7 @@ import type {
   DecisionExplanation,
   RebuttalRunResult
 } from "../types/rebuttal";
+import type { WorkflowState } from "../types/workflow";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -48,6 +49,14 @@ export interface ResolutionRunResult {
    * replayed run can report `real` while spending nothing.
    */
   replayMetadata: ReplayMetadata;
+  /**
+   * The authoritative workflow state machine.
+   *
+   * `null` only for a response stored before the state machine existed. When it
+   * is present the UI derives every step's state from it and does not look at
+   * `pipeline` at all.
+   */
+  workflow: WorkflowState | null;
   pipeline: AdvocateRunResult["pipeline"];
   audit: AuditEvent[];
 }

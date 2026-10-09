@@ -61,7 +61,8 @@ export default function App() {
     try {
       setAdvocateRun(await caseService.runAdvocates(selectedId));
     } catch (requestError: unknown) {
-      setAdvocateRun(null);
+      // Same rule as the full run: keep the previous advocates rather than
+      // blanking the panel because one call failed.
       setAdvocateError(requestError instanceof Error ? requestError.message : "Unable to run the advocates.");
     } finally {
       setAdvocateRunning(false);
@@ -87,7 +88,10 @@ export default function App() {
         pipeline: result.pipeline
       });
     } catch (requestError: unknown) {
-      setResolutionRun(null);
+      // A failed run must not erase a result the operator already has. The
+      // error is reported alongside the previous result; the alternative —
+      // clearing it — turns a transient outage into lost work, and the
+      // deterministic half of a completed run is still perfectly valid.
       setResolutionError(requestError instanceof Error ? requestError.message : "Unable to run the resolution pipeline.");
     } finally {
       setResolutionRunning(false);

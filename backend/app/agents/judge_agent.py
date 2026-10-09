@@ -27,14 +27,16 @@ from app.agents.provider import (
     LlmProviderError,
 )
 from app.agents.providers.openai_compatible import parse_json_object
+from app.agents.provider_schema import provider_schema_for
+from app.agents.typed_call import ModelOutputContractError, complete_typed
 from app.models.judge import JudgeCaseContext, JudgeOutput, JudgeOutputErrorCode
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-JUDGE_PROMPT_VERSION = "judge_prompts_v1"
+JUDGE_PROMPT_VERSION = "judge_prompts_v2"
 
 
-class JudgeAgentError(RuntimeError):
+class JudgeAgentError(ModelOutputContractError):
     """Raised when the Judge cannot produce a usable, validated output.
 
     Mirrors ``AdvocateAgentError``, including the ``completion`` carry-over, so a
@@ -69,9 +71,9 @@ class JudgeAgent:
         self._provider = provider
         self._settings = settings or AgentSettings()
         self._rules = (PROMPTS_DIR / "judge_common.md").read_text(encoding="utf-8")
-        self._output_schema = json.loads(
-            (PROMPTS_DIR / "judge_output_schema.json").read_text(encoding="utf-8")
-        )
+        self._output_contract = (PROMPTS_DIR / "output_contract.md").read_text(encoding="utf-8")
+        # Derived from the model that validates the answer; see provider_schema.
+        self._output_schema = provider_schema_for(JudgeOutput)
 
     @property
     def provider_name(self) -> str:
@@ -86,24 +88,20 @@ class JudgeAgent:
         return self.judge_with_trace(context).output
 
     def judge_with_trace(self, context: JudgeCaseContext) -> JudgeDecision:
-        completion = self._provider.complete(
-            AgentCompletionRequest(
-                system_prompt=self._system_prompt(),
-                user_prompt=self._user_prompt(context),
-                response_schema=self._output_schema,
-                temperature=self._settings.temperature,
-                max_tokens=self._settings.max_tokens,
-                extra_body=self._extra_body(),
-                metadata={
-                    "context_json": context.model_dump_json(by_alias=True),
-                    "role": "judge",
-                },
-            )
+        request = AgentCompletionRequest(
+            system_prompt=self._system_prompt(),
+            user_prompt=self._user_prompt(context),
+            response_schema=self._output_schema,
+            temperature=self._settings.temperature,
+            max_tokens=self._settings.max_tokens,
+            extra_body=self._extra_body(),
+            metadata={
+                "context_json": context.model_dump_json(by_alias=True),
+                "role": "judge",
+            },
         )
-        return JudgeDecision(
-            output=self._parse(completion.raw_text, completion),
-            completion=completion,
-        )
+        output, completion = complete_typed(self._provider, request, self._parse)
+        return JudgeDecision(output=output, completion=completion)
 
     def _extra_body(self) -> dict[str, object]:
         if self._settings.reasoning_effort:
@@ -111,16 +109,12 @@ class JudgeAgent:
         return {}
 
     def _system_prompt(self) -> str:
-        return "\n\n".join(
-            [
-                self._rules,
-                "# Required output schema\n\n"
-                "Respond with a single JSON object matching this schema exactly:\n\n"
-                "```json\n"
-                + json.dumps(self._output_schema, indent=2)
-                + "\n```",
-            ]
-        )
+        """Behavioural rules only; the schema travels as a request constraint.
+
+        See ``BaseAdvocateAgent._system_prompt`` for why the schema is not
+        reproduced here.
+        """
+        return "\n\n".join([self._rules, self._output_contract])
 
     @staticmethod
     def _user_prompt(context: JudgeCaseContext) -> str:

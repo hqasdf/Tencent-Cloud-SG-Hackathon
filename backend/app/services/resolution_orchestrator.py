@@ -78,6 +78,7 @@ from app.services.audit import (
 from app.services.counterfactual import CounterfactualService
 from app.services.explanation import DecisionExplanationService
 from app.services.rebuttal_orchestrator import RebuttalOrchestratorService
+from app.services.workflow_state import build_workflow_state
 
 JUDGE_STAGE = "JUDGE"
 
@@ -196,6 +197,12 @@ class ResolutionOrchestratorService:
 
         pipeline = _with_rebuttal_stages(list(advocate_run.pipeline), rebuttal_run)
 
+        # The dependency gate is evaluated once, here, and the same answer is
+        # handed to the Judge and to the workflow object. Computing it twice
+        # would allow the Judge to block while the UI reported the case as
+        # decidable — or the reverse.
+        blocked_sides = self._blocked_reason(advocate_run)
+
         judge_result = self._run_judge(
             case,
             analysis,
@@ -206,10 +213,14 @@ class ResolutionOrchestratorService:
             replay=plan.judge_replayed,
             capture="JUDGE" in capture_stages,
             provenance=provenance,
+            blocked=blocked_sides,
         )
         _mark(pipeline, JUDGE_STAGE, _stage_status(judge_result.status))
 
         deterministic = self._deterministic(analysis)
+        explanation = self._explanations.build(
+            analysis, advocate_run, rebuttal_run, judge_result
+        )
 
         return CaseResolutionResponse(
             case_id=case.id,
@@ -224,12 +235,16 @@ class ResolutionOrchestratorService:
             # Both of these are pure projections of deterministic data. They are
             # built after the Judge only so the explanation can report whether the
             # AI's advice agreed with the code's decision.
-            explanation=self._explanations.build(
-                analysis, advocate_run, rebuttal_run, judge_result
-            ),
+            explanation=explanation,
             counterfactual=self._counterfactuals.build(analysis),
             replay_metadata=_replay_metadata(plan, current_hash, provenance),
             pipeline=pipeline,
+            workflow=build_workflow_state(
+                advocate_run=advocate_run,
+                rebuttal_run=rebuttal_run,
+                judge_result=judge_result,
+                blocked_sides=blocked_sides,
+            ),
             audit=audit.events,
         )
 
@@ -247,8 +262,8 @@ class ResolutionOrchestratorService:
         replay: bool = False,
         capture: bool = False,
         provenance: dict[str, object] | None = None,
+        blocked: list[str] | None,
     ) -> JudgeResult:
-        blocked = self._blocked_reason(advocate_run)
         if blocked is not None:
             audit.record(
                 JUDGE_NOT_RUN,

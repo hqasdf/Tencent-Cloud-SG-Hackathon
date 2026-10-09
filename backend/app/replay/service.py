@@ -159,10 +159,17 @@ class ReplayService:
         Refuses when either side failed. A one-sided artefact would describe a
         case state the pipeline can never replay into a decision, so writing it
         would create a file that looks reusable and is not.
+
+        The status check is separate from the raw-output check on purpose: a side
+        can return raw output and still not be ``COMPLETE`` (a verification or
+        validation failure), and capturing that would store an argument the
+        pipeline refused to use.
         """
         rider_raw = raw_outputs.get("RIDER")
         driver_raw = raw_outputs.get("DRIVER")
         if rider_raw is None or driver_raw is None:
+            return None
+        if advocate_run.rider.status != "COMPLETE" or advocate_run.driver.status != "COMPLETE":
             return None
 
         artifact = AdvocateArtifact(
@@ -173,8 +180,9 @@ class ReplayService:
             dispute_type=case.dispute_type,
             deterministic_analysis_hash=deterministic_analysis_hash(case, analysis),
             trusted_context_hash=trusted_context_hash(context),
-            provider=advocate_run.agent_run.provider,
-            model=advocate_run.agent_run.model,
+            captured_mode=self._settings.mode,
+            captured_provider=advocate_run.agent_run.provider,
+            captured_model=advocate_run.agent_run.model,
             payload={
                 "rider": _stored_advocate_side(advocate_run.rider, rider_raw),
                 "driver": _stored_advocate_side(advocate_run.driver, driver_raw),
@@ -205,7 +213,17 @@ class ReplayService:
         missing rebuttal is a normal outcome that does not block the Judge, so
         reproducing it faithfully is the honest thing to do — inventing an empty
         rebuttal to fill the gap would not be.
+
+        That tolerance has a floor: **if no side ran, nothing is captured.** The
+        stage was never reached — normally because an advocate failed — so there
+        is no rebuttal output to record. Writing an artefact anyway produces a
+        file that names a stage which did not execute, carries no provider and no
+        model, and can later be mistaken for a capture of real model output. The
+        stage's own status is the authority: ``NOT_RUN`` writes nothing.
         """
+        if _rebuttal_stage_did_not_run(rebuttal_run):
+            return None
+
         artifact = RebuttalArtifact(
             replay_version=REPLAY_FORMAT_VERSION,
             schema_version=REBUTTAL_SCHEMA_VERSION,
@@ -214,8 +232,9 @@ class ReplayService:
             dispute_type=case.dispute_type,
             deterministic_analysis_hash=deterministic_analysis_hash(case, analysis),
             trusted_context_hash=trusted_context_hash(context),
-            provider=_rebuttal_provider(rebuttal_run),
-            model=_rebuttal_model(rebuttal_run),
+            captured_mode=self._settings.mode,
+            captured_provider=_rebuttal_provider(rebuttal_run),
+            captured_model=_rebuttal_model(rebuttal_run),
             payload={
                 "rider": _stored_rebuttal_side(
                     rebuttal_run.rider, raw_outputs.get("RIDER")
@@ -259,8 +278,9 @@ class ReplayService:
             dispute_type=case.dispute_type,
             deterministic_analysis_hash=deterministic_analysis_hash(case, analysis),
             trusted_context_hash=trusted_context_hash(context),
-            provider=execution.provider if execution else "",
-            model=execution.model if execution else None,
+            captured_mode=self._settings.mode,
+            captured_provider=execution.provider if execution else "",
+            captured_model=execution.model if execution else None,
             payload=StoredJudgePayload(output=judge_output, execution=execution),
         )
         path = self._store.write(artifact)
@@ -736,6 +756,19 @@ def _blocked_reason(advocate_run: AdvocateRunResponse) -> list[str] | None:
         if side.status != "COMPLETE"
     ]
     return failed or None
+
+
+def _rebuttal_stage_did_not_run(rebuttal_run: RebuttalRunResponse) -> bool:
+    """True when neither rebuttal side ran, so there is nothing to capture.
+
+    ``NOT_RUN`` means the stage was never reached -- the advocates did not both
+    produce an argument. That is different from a side that ran and failed, which
+    is a real outcome worth storing. Only the former blocks the capture.
+    """
+    return all(
+        side.status == "NOT_RUN"
+        for side in (rebuttal_run.rider, rebuttal_run.driver)
+    )
 
 
 def _rebuttal_provider(rebuttal_run: RebuttalRunResponse) -> str:

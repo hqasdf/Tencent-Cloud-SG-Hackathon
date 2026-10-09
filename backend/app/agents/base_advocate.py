@@ -14,6 +14,8 @@ from app.agents.provider import (
     LlmProviderError,
 )
 from app.agents.providers.openai_compatible import parse_json_object
+from app.agents.provider_schema import provider_schema_for
+from app.agents.typed_call import ModelOutputContractError, complete_typed
 from app.models.advocate import AdvocateOutput
 from app.models.agent import AgentCaseContext
 
@@ -35,7 +37,7 @@ class AdvocateOutputErrorCode:
     ADVOCATE_ERROR = "ADVOCATE_ERROR"
 
 
-class AdvocateAgentError(RuntimeError):
+class AdvocateAgentError(ModelOutputContractError):
     """Raised when an advocate cannot produce a usable, validated output.
 
     ``completion`` carries the provider response when there was one. It is kept
@@ -43,6 +45,10 @@ class AdvocateAgentError(RuntimeError):
     execution metadata: a model that reliably runs out of budget is exactly the
     kind of thing Stage 4C needs to see, and discarding the metrics would hide
     it.
+
+    Deriving from ``ModelOutputContractError`` is what makes the code below
+    eligible for the single bounded repair in ``complete_typed`` — but only for
+    the codes listed in ``REPAIRABLE_OUTPUT_CODES``.
     """
 
     def __init__(
@@ -81,9 +87,10 @@ class BaseAdvocateAgent:
         self._settings = settings or AgentSettings()
         self._common_rules = (PROMPTS_DIR / "advocate_common.md").read_text(encoding="utf-8")
         self._side_prompt = (PROMPTS_DIR / self.prompt_file).read_text(encoding="utf-8")
-        self._output_schema = json.loads(
-            (PROMPTS_DIR / "output_schema.json").read_text(encoding="utf-8")
-        )
+        self._output_contract = (PROMPTS_DIR / "output_contract.md").read_text(encoding="utf-8")
+        # Derived from the model that validates the answer, so the schema the
+        # provider is held to cannot drift from the schema the parser enforces.
+        self._output_schema = provider_schema_for(AdvocateOutput)
 
     @property
     def provider_name(self) -> str:
@@ -101,47 +108,50 @@ class BaseAdvocateAgent:
         """Produce a validated argument together with its execution metrics.
 
         The provider call and the parse are kept in one place so latency and
-        token usage stay attached to the argument they produced.
+        token usage stay attached to the argument they produced. ``complete_typed``
+        owns the single bounded repair for malformed output; this method supplies
+        the parser, so the definition of "valid" stays in exactly one place.
         """
-        completion = self._provider.complete(
-            AgentCompletionRequest(
-                system_prompt=self._system_prompt(),
-                user_prompt=self._user_prompt(context),
-                response_schema=self._output_schema,
-                temperature=self._settings.temperature,
-                max_tokens=self._settings.max_tokens,
-                # A gateway-only knob, kept out of the generic provider contract.
-                # Unset by default, so the request body is unchanged unless an
-                # operator explicitly asks for lighter reasoning.
-                extra_body=self._extra_body(),
-                metadata={
-                    "context_json": context.model_dump_json(by_alias=True),
-                    "side": self.side,
-                },
-            )
+        request = AgentCompletionRequest(
+            system_prompt=self._system_prompt(),
+            user_prompt=self._user_prompt(context),
+            response_schema=self._output_schema,
+            temperature=self._settings.temperature,
+            max_tokens=self._settings.max_tokens,
+            # A gateway-only knob, kept out of the generic provider contract.
+            extra_body=self._extra_body(),
+            metadata={
+                "context_json": context.model_dump_json(by_alias=True),
+                "side": self.side,
+            },
         )
-        return AdvocateArgument(
-            output=self._parse(completion.raw_text, completion),
-            completion=completion,
-        )
+        output, completion = complete_typed(self._provider, request, self._parse)
+        return AdvocateArgument(output=output, completion=completion)
 
     def _extra_body(self) -> dict[str, object]:
-        """Provider-specific optional request fields for this call."""
+        """Provider-specific optional request fields for this call.
+
+        Unset by default so the request body is unchanged unless an operator
+        explicitly asks for lighter reasoning. A local thinking model is the
+        reason this is not hardcoded: the knob is meaningful for one transport
+        and unknown to the others.
+        """
         if self._settings.reasoning_effort:
             return {"reasoning_effort": self._settings.reasoning_effort}
         return {}
 
     def _system_prompt(self) -> str:
+        """Behavioural rules only.
+
+        The response schema is **not** reproduced here. It is attached to the
+        request as a structured-output constraint, which the provider enforces
+        while generating, so pasting it into the prompt as well would send the
+        same information twice and pay input tokens for the duplicate. The
+        prompt carries only what the schema cannot express: the authority
+        hierarchy, the evidence and policy discipline, and the output contract.
+        """
         return "\n\n".join(
-            [
-                self._common_rules,
-                self._side_prompt,
-                "# Required output schema\n\n"
-                "Respond with a single JSON object matching this schema exactly:\n\n"
-                "```json\n"
-                + json.dumps(self._output_schema, indent=2)
-                + "\n```",
-            ]
+            [self._common_rules, self._side_prompt, self._output_contract]
         )
 
     @staticmethod

@@ -843,14 +843,55 @@ def test_a_provider_failure_degrades_one_side_and_never_falls_back_to_mock() -> 
 
 
 def test_unusable_model_output_is_flagged_as_malformed_not_as_an_outage() -> None:
+    """Both responses are malformed, so the repair is spent and the code survives.
+
+    The stub now serves two malformed responses for the rider, because a
+    malformed response earns exactly one repair. The assertion is unchanged in
+    substance: malformed model output is reported as a model-output failure, never
+    as a provider outage.
+    """
     case = clean_case("route_deviation")
     context, analysis = context_for(case)
-    provider, _ = make_provider([ok("not json at all"), ok(advocate_json(context, "DRIVER"))])
+    provider, recorded = make_provider(
+        [
+            ok("not json at all"),
+            ok("still not json"),
+            ok(advocate_json(context, "DRIVER")),
+        ]
+    )
     result = AdvocateOrchestratorService(settings=real_settings(), provider=provider).run(case, analysis)
 
     assert result.rider.status == "FAILED"
     assert result.rider.execution.malformed_output is True
     assert result.rider.execution.failure_code == AdvocateOutputErrorCode.MALFORMED_JSON
+    # The rider made two requests (the malformed one plus its repair); the driver
+    # made one. Three in total, so the repair is bounded to the failing stage and
+    # is not a session-wide retry.
+    assert len(recorded) == 3, "one attempt plus exactly one repair, for the rider only"
+    assert result.driver.status == "COMPLETE"
+
+
+def test_a_malformed_response_that_repairs_cleanly_completes() -> None:
+    """The repair path is not merely a failure path.
+
+    A model that is malformed once and correct on the retry produces a normal,
+    usable argument. The rider's two requests are both visible in the record,
+    because a repair is a real request and not a free second chance.
+    """
+    case = clean_case("route_deviation")
+    context, analysis = context_for(case)
+    provider, recorded = make_provider(
+        [
+            ok("not json at all"),
+            ok(advocate_json(context, "RIDER")),
+            ok(advocate_json(context, "DRIVER")),
+        ]
+    )
+    result = AdvocateOrchestratorService(settings=real_settings(), provider=provider).run(case, analysis)
+
+    assert result.rider.status == "COMPLETE"
+    assert result.rider.verified_claims
+    assert len(recorded) == 3, "the rider's repair really did make a second request"
 
 
 def test_a_wrong_side_response_is_rejected_by_the_agent() -> None:
@@ -864,11 +905,28 @@ def test_a_wrong_side_response_is_rejected_by_the_agent() -> None:
 
 
 def test_agent_raises_a_coded_error_for_malformed_output() -> None:
-    provider, _ = make_provider([ok("still not json")])
+    """Malformed twice: the coded error survives the single repair attempt."""
+    provider, _ = make_provider([ok("still not json"), ok("also not json")])
     agent = RiderAdvocateAgent(provider, real_settings())
     with pytest.raises(AdvocateAgentError) as caught:
         agent.argue(context_for(clean_case("route_deviation"))[0])
     assert caught.value.code == AdvocateOutputErrorCode.MALFORMED_JSON
+
+
+def test_the_second_failure_is_chained_to_the_first() -> None:
+    """A repair must not hide that the model was malformed twice.
+
+    Without the chain, a repaired call that fails again looks like one unlucky
+    answer. The chain is what tells an operator the model produced unusable output
+    twice.
+    """
+    provider, _ = make_provider([ok("first was not json"), ok("second was not json")])
+    agent = RiderAdvocateAgent(provider, real_settings())
+    with pytest.raises(AdvocateAgentError) as caught:
+        agent.argue(context_for(clean_case("route_deviation"))[0])
+
+    assert isinstance(caught.value.__cause__, AdvocateAgentError)
+    assert caught.value.__cause__.code == AdvocateOutputErrorCode.MALFORMED_JSON
 
 
 def test_no_secret_appears_anywhere_in_the_real_mode_response() -> None:
@@ -967,15 +1025,31 @@ def test_configured_max_tokens_is_actually_sent() -> None:
 def test_max_tokens_is_configurable_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AGENT_MODE", "mock")
     monkeypatch.setenv("AGENT_PROVIDER", "mock")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "900")
+    assert AgentSettings.from_environment().max_tokens == 900
+
+
+def test_a_max_tokens_above_the_ceiling_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The output budget is bounded, and the bound is enforced rather than advised.
+
+    ``AGENT_MAX_TOKENS=8192`` used to be accepted. It is now a configuration
+    error: a typed agent call has a 1024-token generation ceiling, and silently
+    clamping a larger value would leave the operator believing the setting they
+    wrote was in force. Rejecting it names the ceiling instead.
+    """
+    monkeypatch.setenv("AGENT_MODE", "mock")
+    monkeypatch.setenv("AGENT_PROVIDER", "mock")
     monkeypatch.setenv("AGENT_MAX_TOKENS", "8192")
-    assert AgentSettings.from_environment().max_tokens == 8192
+    with pytest.raises(AgentConfigurationError, match="must be <= 1024"):
+        AgentSettings.from_environment()
 
 
-def test_default_max_tokens_is_unchanged_for_cloud_models(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_default_max_tokens_is_the_typed_output_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The default moved from 2000 to 1024 when the request layer was bounded."""
     monkeypatch.setenv("AGENT_MODE", "mock")
     monkeypatch.setenv("AGENT_PROVIDER", "mock")
     monkeypatch.setenv("AGENT_MAX_TOKENS", "")
-    assert AgentSettings.from_environment().max_tokens == 2000
+    assert AgentSettings.from_environment().max_tokens == 1024
 
 
 def test_a_non_numeric_max_tokens_fails_loudly(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1276,12 +1350,18 @@ def test_a_gateway_knob_cannot_change_the_configured_model() -> None:
     assert recorded[0]["json"]["model"] == MODEL
 
 
-def test_default_agent_request_sends_no_reasoning_effort() -> None:
-    """Unset must mean 'do not ask', not 'ask for the default'."""
+def test_the_default_agent_request_asks_for_low_reasoning() -> None:
+    """The default is now ``low``, not "do not ask".
+
+    These are typed decisions. A reasoning model left at its own default spends
+    part of the 1024-token output budget on deliberation the decision does not
+    need, and Gemini bills thinking tokens against that same budget. ``low`` is
+    the supported equivalent of ReStock's ``think = false``.
+    """
     context = context_for(clean_case("route_deviation"))[0]
     provider, recorded = make_provider([ok(advocate_json(context, "RIDER"))])
     RiderAdvocateAgent(provider, AgentSettings(mode="mock")).argue(context)
-    assert "reasoning_effort" not in recorded[0]["json"]
+    assert recorded[0]["json"]["reasoning_effort"] == "low"
 
 
 def test_a_configured_reasoning_effort_is_sent_by_the_agent() -> None:

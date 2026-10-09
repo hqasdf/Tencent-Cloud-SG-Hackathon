@@ -27,6 +27,81 @@ _RESERVED_PAYLOAD_KEYS = frozenset(
     {"model", "messages", "temperature", "response_format", "max_tokens", "stream"}
 )
 
+# JSON Schema keywords that describe the *document* rather than the value it
+# constrains. A provider that maps this schema onto its own native response
+# schema has no use for them, and the native subset does not list them.
+_SCHEMA_META_KEYWORDS = frozenset({"$schema", "$id", "$comment"})
+
+# The schema name the provider requires alongside a structured-output schema.
+# Preferred from the schema's own title, because that is the name a human wrote.
+_DEFAULT_SCHEMA_NAME = "ryderesolve_output"
+
+
+def provider_schema(schema: object) -> object:
+    """Project a JSON Schema onto the subset a native response schema supports.
+
+    Two transforms, both semantics-preserving — the constraint the model is held
+    to is the same one Pydantic will enforce afterwards, so this cannot loosen
+    the contract:
+
+    * **Document meta keywords are dropped.** ``$schema``/``$id``/``$comment``
+      describe the schema document, not the value. They are not in the supported
+      subset and some providers reject a schema that carries them.
+    * **A bare multi-type array becomes ``anyOf``.** ``{"type": ["number",
+      "boolean"]}`` is valid JSON Schema but is *not* in the documented subset,
+      which only shows the type-array form combined with ``null``. ``anyOf`` is
+      documented and means exactly the same thing. The ``["<type>", "null"]``
+      form is left alone, because that one *is* documented.
+
+    This is a projection, not a redefinition: it is applied to the outbound
+    request only. The schema the response is validated against is untouched, and
+    it remains the authority.
+    """
+    if isinstance(schema, list):
+        return [provider_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+
+    types = schema.get("type")
+    widened = (
+        isinstance(types, list) and len(types) > 1 and "null" not in types
+    )
+
+    projected: dict = {}
+    if widened:
+        projected["anyOf"] = [{"type": kind} for kind in types]
+    for key, value in schema.items():
+        if key in _SCHEMA_META_KEYWORDS:
+            continue
+        if widened and key == "type":
+            # Already expressed as anyOf above; keeping both would be ambiguous.
+            continue
+        projected[key] = provider_schema(value)
+    return projected
+
+
+def build_response_format(response_schema: dict | None) -> dict:
+    """The structured-output constraint for one request.
+
+    When the agent supplies a schema, the real schema is sent as the provider's
+    constraint — not merely described in the prompt. A prompt that says "respond
+    with this shape" is a request; a schema attached to the request is a
+    constraint the provider enforces while generating, which is why a model
+    cannot quietly drift out of shape on the first token.
+
+    With no schema, the weakest correct constraint is used: any JSON object.
+    """
+    if not response_schema:
+        return {"type": "json_object"}
+    name = response_schema.get("title")
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": name if isinstance(name, str) and name else _DEFAULT_SCHEMA_NAME,
+            "schema": provider_schema(response_schema),
+        },
+    }
+
 
 class OpenAiCompatibleProvider:
     """Generic OpenAI-compatible chat-completions provider.
@@ -119,7 +194,13 @@ class OpenAiCompatibleProvider:
             {"role": "user", "content": request.user_prompt},
         ]
         payload["temperature"] = request.temperature
-        payload["response_format"] = {"type": "json_object"}
+        # The agent's own schema, where it supplied one. This is the difference
+        # between asking for a shape and enforcing it.
+        payload["response_format"] = build_response_format(request.response_schema)
+        # Stated rather than implied. A streamed response cannot be validated as
+        # one object, and a gateway that defaulted to streaming would turn every
+        # typed call into a partial-JSON failure.
+        payload["stream"] = False
         if request.max_tokens:
             payload["max_tokens"] = request.max_tokens
 

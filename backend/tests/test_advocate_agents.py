@@ -234,16 +234,20 @@ def test_prompt_files_exist_and_are_non_trivial() -> None:
         assert len(path.read_text(encoding="utf-8").strip()) > 200, f"{name} is too thin"
 
 
-def test_output_schema_file_omits_position_as_a_property() -> None:
+def test_output_schema_omits_position_as_a_property() -> None:
     """`position` must not exist as a SCHEMA FIELD.
 
     The word may legitimately appear inside a human-readable description (e.g.
     "an honest position for your side"), so this checks the declared property
     names rather than doing a substring scan over the whole document.
-    """
-    from app.agents.base_advocate import PROMPTS_DIR
 
-    schema = json.loads((PROMPTS_DIR / "output_schema.json").read_text(encoding="utf-8"))
+    The schema is derived from ``AdvocateOutput`` because the model is the single
+    source of truth; there is no hand-maintained schema document to drift.
+    """
+    from app.agents.provider_schema import provider_schema_for
+    from app.models.advocate import AdvocateOutput
+
+    schema = provider_schema_for(AdvocateOutput)
 
     def property_names(node: object) -> set[str]:
         names: set[str] = set()

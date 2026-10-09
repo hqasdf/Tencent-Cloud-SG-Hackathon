@@ -38,11 +38,11 @@ Set `requestedOutcome` to the outcome the driver would seek — for example
 a refund amount or a final action.
 
 Use `assertedFacts` for any measured value you quote, so it can be verified
-against the trusted calculation. For example:
-
-```json
-{"fact": "WAITING_DURATION_SECONDS", "value": 372}
-```
+against the trusted calculation. Each entry is an object with a `fact` name and
+the `value` you are quoting, for example `{"fact": "WAITING_DURATION_SECONDS",
+"value": 372}`. The example is shown inline rather than in a code fence on
+purpose: the output contract forbids Markdown, and a fenced example invites the
+model to fence its own answer.
 
 Allowed fact names: `EXPECTED_DISTANCE_KM`, `ACTUAL_DISTANCE_KM`,
 `DISTANCE_DIFFERENCE_KM`, `DEVIATION_PERCENTAGE`, `EXPECTED_DURATION_MINUTES`,

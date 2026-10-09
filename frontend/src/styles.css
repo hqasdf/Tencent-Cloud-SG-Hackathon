@@ -1793,8 +1793,39 @@ code {
 .workflow-progress {
   font-size: 12px;
   color: #A8B3CF;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .workflow-progress b { color: #fff; }
+
+/* Counts of steps that did not simply succeed. They sit beside the total so a
+   reader cannot take "6 of 8" for "6 of 8, and the rest are fine". */
+.workflow-flag {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.workflow-flag.blocked { background: rgba(255, 241, 221, 0.16); color: #FFCE8A; }
+.workflow-flag.failed { background: rgba(253, 232, 229, 0.18); color: #FFB4A6; }
+
+.workflow-notice {
+  margin: 0 0 14px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--rvde-warn);
+  border-left-width: 4px;
+  background: var(--rvde-warn-bg);
+  color: var(--rvde-navy);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.workflow-notice b { font-weight: 800; }
 
 .workflow-toolbar-actions {
   display: flex;
@@ -1889,7 +1920,10 @@ code {
 }
 .rail-chip.done i { background: var(--rvde-success-bg); color: var(--rvde-success); }
 .rail-chip.ready i { background: var(--rvde-pink); color: #fff; }
-.rail-chip.blocked i { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+/* Amber, not red: a blocked step did nothing wrong — it is waiting on a
+   dependency that failed, and the operator's next move is to fix that. */
+.rail-chip.blocked i { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.rail-chip.failed i { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
 .rail-chip.waiting { opacity: 0.72; }
 .rail-chip:hover { border-color: var(--rvde-pink-soft); color: var(--rvde-navy); }
 .rail-chip.current {
@@ -1936,6 +1970,8 @@ code {
 }
 .wstep.done .wstep-num { background: var(--rvde-success-bg); color: var(--rvde-success); }
 .wstep.ready .wstep-num { background: var(--rvde-pink); color: #fff; }
+.wstep.blocked .wstep-num { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.wstep.failed .wstep-num { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
 .wstep.open .wstep-num { background: var(--rvde-navy); color: #fff; }
 
 .wstep-title { flex: 1 1 auto; min-width: 0; }
@@ -1967,7 +2003,8 @@ code {
 }
 .wstep-pill.done { background: var(--rvde-success-bg); color: var(--rvde-success); }
 .wstep-pill.ready { background: var(--rvde-pink-soft); color: var(--rvde-pink-deep); }
-.wstep-pill.blocked { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
+.wstep-pill.blocked { background: var(--rvde-warn-bg); color: var(--rvde-warn); }
+.wstep-pill.failed { background: var(--rvde-danger-bg); color: var(--rvde-danger); }
 
 .wstep-chevron {
   flex: 0 0 auto;

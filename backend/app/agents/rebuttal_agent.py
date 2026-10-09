@@ -27,6 +27,8 @@ from app.agents.provider import (
     LlmProviderError,
 )
 from app.agents.providers.openai_compatible import parse_json_object
+from app.agents.provider_schema import provider_schema_for
+from app.agents.typed_call import ModelOutputContractError, complete_typed
 from app.models.rebuttal import (
     RebuttalCaseContext,
     RebuttalOutput,
@@ -35,10 +37,10 @@ from app.models.rebuttal import (
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-REBUTTAL_PROMPT_VERSION = "rebuttal_prompts_v1"
+REBUTTAL_PROMPT_VERSION = "rebuttal_prompts_v2"
 
 
-class RebuttalAgentError(RuntimeError):
+class RebuttalAgentError(ModelOutputContractError):
     """Raised when a rebuttal cannot produce a usable, validated output.
 
     Mirrors ``AdvocateAgentError`` and ``JudgeAgentError``, including the
@@ -73,9 +75,9 @@ class RebuttalAgent:
         self._provider = provider
         self._settings = settings or AgentSettings()
         self._rules = (PROMPTS_DIR / "rebuttal_common.md").read_text(encoding="utf-8")
-        self._output_schema = json.loads(
-            (PROMPTS_DIR / "rebuttal_output_schema.json").read_text(encoding="utf-8")
-        )
+        self._output_contract = (PROMPTS_DIR / "output_contract.md").read_text(encoding="utf-8")
+        # Derived from the model that validates the answer; see provider_schema.
+        self._output_schema = provider_schema_for(RebuttalOutput)
 
     @property
     def provider_name(self) -> str:
@@ -90,25 +92,23 @@ class RebuttalAgent:
         return self.rebut_with_trace(context).output
 
     def rebut_with_trace(self, context: RebuttalCaseContext) -> RebuttalArgument:
-        completion = self._provider.complete(
-            AgentCompletionRequest(
-                system_prompt=self._system_prompt(),
-                user_prompt=self._user_prompt(context),
-                response_schema=self._output_schema,
-                temperature=self._settings.temperature,
-                max_tokens=self._settings.max_tokens,
-                extra_body=self._extra_body(),
-                metadata={
-                    "context_json": context.model_dump_json(by_alias=True),
-                    "role": "rebuttal",
-                    "side": context.own_side,
-                },
-            )
+        request = AgentCompletionRequest(
+            system_prompt=self._system_prompt(),
+            user_prompt=self._user_prompt(context),
+            response_schema=self._output_schema,
+            temperature=self._settings.temperature,
+            max_tokens=self._settings.max_tokens,
+            extra_body=self._extra_body(),
+            metadata={
+                "context_json": context.model_dump_json(by_alias=True),
+                "role": "rebuttal",
+                "side": context.own_side,
+            },
         )
-        return RebuttalArgument(
-            output=self._parse(completion.raw_text, context.own_side, completion),
-            completion=completion,
+        output, completion = complete_typed(
+            self._provider, request, lambda text, done: self._parse(text, context.own_side, done)
         )
+        return RebuttalArgument(output=output, completion=completion)
 
     def _extra_body(self) -> dict[str, object]:
         if self._settings.reasoning_effort:
@@ -116,16 +116,12 @@ class RebuttalAgent:
         return {}
 
     def _system_prompt(self) -> str:
-        return "\n\n".join(
-            [
-                self._rules,
-                "# Required output schema\n\n"
-                "Respond with a single JSON object matching this schema exactly:\n\n"
-                "```json\n"
-                + json.dumps(self._output_schema, indent=2)
-                + "\n```",
-            ]
-        )
+        """Behavioural rules only; the schema travels as a request constraint.
+
+        See ``BaseAdvocateAgent._system_prompt`` for why the schema is not
+        reproduced here.
+        """
+        return "\n\n".join([self._rules, self._output_contract])
 
     @staticmethod
     def _user_prompt(context: RebuttalCaseContext) -> str:

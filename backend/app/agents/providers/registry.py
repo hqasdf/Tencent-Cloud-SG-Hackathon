@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from app.agents.config import AgentConfigurationError, AgentSettings
 from app.agents.provider import LlmProvider
+from app.agents.providers.gemini_native import GeminiNativeProvider
 from app.agents.providers.mock import MockLlmProvider
 from app.agents.providers.openai_compatible import OpenAiCompatibleProvider
 from app.agents.providers.tencent_tokenhub import TencentTokenHubProvider
 
-SUPPORTED_PROVIDERS = ("mock", "openai_compatible", "tencent_tokenhub")
+SUPPORTED_PROVIDERS = (
+    "mock",
+    "openai_compatible",
+    "tencent_tokenhub",
+    "gemini_native",
+)
 
 
 def get_provider(settings: AgentSettings) -> LlmProvider:
@@ -19,6 +25,11 @@ def get_provider(settings: AgentSettings) -> LlmProvider:
     TokenHub is mapped onto the shared OpenAI-compatible transport rather than
     given a duplicate HTTP client: TokenHub speaks the same wire protocol, so
     only the label and the default base URL differ.
+
+    ``gemini_native`` is a genuinely different transport, not a relabelling: it
+    calls ``generateContent`` and expresses the response schema through Gemini's
+    native mechanism. It exists because the OpenAI-compatible endpoint could not
+    serve a structured-output request for this model.
     """
     settings.validate()
 
@@ -29,6 +40,17 @@ def get_provider(settings: AgentSettings) -> LlmProvider:
         _require_real_mode("tencent_tokenhub", settings)
         return TencentTokenHubProvider(
             base_url=settings.base_url,
+            model=settings.model or "",
+            api_key=settings.api_key or "",
+            timeout_seconds=settings.timeout_seconds,
+            max_retries=settings.max_retries,
+            retry_backoff_seconds=settings.retry_backoff_seconds,
+            retry_max_backoff_seconds=settings.retry_max_backoff_seconds,
+        )
+
+    if settings.provider == "gemini_native":
+        _require_real_mode("gemini_native", settings)
+        return GeminiNativeProvider(
             model=settings.model or "",
             api_key=settings.api_key or "",
             timeout_seconds=settings.timeout_seconds,
