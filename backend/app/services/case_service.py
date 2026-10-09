@@ -86,7 +86,7 @@ class CaseService:
         case = self._load_case(case_id)
         analysis = self._analysis_service.analyze(case)
         orchestrator = ResolutionOrchestratorService()
-        return orchestrator.run(case, analysis, replay_mode=replay_mode)
+        return orchestrator.run(case, analysis, replay_mode=replay_mode, resume=replay_mode == NO_REPLAY)
 
     def _load_case(self, case_id: str) -> DisputeCase:
         case = self._repository.get_case(case_id)

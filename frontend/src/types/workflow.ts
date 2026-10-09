@@ -24,6 +24,7 @@ export type StageStatus =
   | "PENDING_HUMAN_REVIEW";
 
 export interface StageState {
+  reused: boolean;
   status: StageStatus;
   /** Machine-readable cause, e.g. `ADVOCATE_INPUT_INCOMPLETE`. */
   reason: string | null;

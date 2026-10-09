@@ -82,6 +82,14 @@ def build_workflow_state(
         )
         judge = _judge_stage(judge_result)
 
+    for state, result in ((advocates.rider, advocate_run.rider),
+                          (advocates.driver, advocate_run.driver),
+                          (rebuttals.rider, rebuttal_run.rider),
+                          (rebuttals.driver, rebuttal_run.driver), (judge, judge_result)):
+        state.reused = bool(result.execution and result.execution.reused)
+        if state.reused:
+            state.detail = "Reused validated checkpoint. " + (state.detail or "")
+
     return WorkflowState(
         deterministic=StageState(status="COMPLETE", detail=_DETERMINISTIC_DETAIL),
         advocates=advocates,

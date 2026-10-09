@@ -721,7 +721,7 @@ def _replayed_run_metadata(artifact, settings: AgentSettings) -> AgentRunMetadat
     return AgentRunMetadata(
         # The configured mode, not a claim about provenance. Provenance is
         # stated in ReplayMetadata, which the UI badges as REPLAYED.
-        mode=settings.mode,
+        mode="real" if artifact.is_live_eligible else "mock",
         provider=artifact.provider or "replay",
         model=artifact.model,
         prompt_version=settings.prompt_version,

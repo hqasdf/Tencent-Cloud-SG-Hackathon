@@ -581,6 +581,19 @@ def test_a_non_retryable_failure_is_not_retried() -> None:
     assert len(client.calls) == 1
 
 
+def test_process_stop_signal_is_never_normalised_or_retried() -> None:
+    class StopSignal(BaseException):
+        pass
+
+    client = _StubClient(error=StopSignal("controlled stop"))
+    provider, _, _ = _provider(client=client, max_retries=2)
+
+    with pytest.raises(StopSignal):
+        provider.complete(_advocate_request())
+
+    assert len(client.calls) == 1
+
+
 def test_a_successful_completion_reports_a_single_attempt() -> None:
     provider, _, _ = _provider(response=_Response(text=_valid_advocate_json()))
 

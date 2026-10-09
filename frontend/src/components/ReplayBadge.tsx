@@ -16,9 +16,13 @@ import { replayedStages } from "../types/replay";
  * stages that came from storage, with the exact provenance in the tooltip.
  */
 export function ReplayBadge({ metadata }: { metadata: ReplayMetadata }) {
-  if (!metadata.replayed) return null;
+  if (!metadata.replayed && !metadata.reusedRoles?.length) return null;
 
-  const stages = replayedStages(metadata);
+  const stages = metadata.reusedRoles?.length
+    ? metadata.reusedRoles.map((role) => role.toLowerCase().replaceAll("_", " "))
+    : replayedStages(metadata);
+  const label = metadata.source === "MOCK_DEMO" ? "MOCK DEMO"
+    : metadata.source === "REPLAYED_LIVE" ? "REPLAYED LIVE" : "HISTORICAL REPLAY (PROVENANCE UNKNOWN)";
   const captured = [metadata.capturedProvider, metadata.capturedModel]
     .filter(Boolean)
     .join(" / ");
@@ -39,7 +43,7 @@ export function ReplayBadge({ metadata }: { metadata: ReplayMetadata }) {
       title={detail}
       aria-label={`Replayed AI output. ${detail}`}
     >
-      REPLAYED{stages.length ? ` · ${stages.join(" + ")}` : ""}
+      {label}{stages.length ? ` · ${stages.join(" + ")}` : ""}
     </span>
   );
 }

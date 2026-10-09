@@ -257,7 +257,7 @@ export function CaseDetail({
               <ReplayInvalidBadge metadata={resolutionRun.replayMetadata} />
               {!resolutionRun.replayMetadata.replayed && (
                 <span className={`mode-badge ${resolutionRun.agentRun.mode}`}>
-                  {resolutionRun.agentRun.mode === "real" ? "REAL MODEL" : "MOCK"}
+                  {resolutionRun.replayMetadata.source === "MOCK_DEMO" ? "MOCK DEMO" : "LIVE"}
                 </span>
               )}
             </>
@@ -268,7 +268,7 @@ export function CaseDetail({
           ) : null}
 
           <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning}>
-            {resolutionRunning ? "Running analysis…" : resolutionRun ? "Run again" : "Run full analysis"}
+            {resolutionRunning ? "Running analysis…" : resolutionRun ? "Retry / reuse completed work" : "Run full analysis"}
           </button>
 
           {/* The cheaper two-call path. Subordinate, and only offered before a

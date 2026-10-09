@@ -73,6 +73,7 @@ class StageState(WorkflowModel):
     """
 
     status: StageStatus
+    reused: bool = False
     reason: str | None = None
     detail: str | None = None
     failure_code: str | None = Field(

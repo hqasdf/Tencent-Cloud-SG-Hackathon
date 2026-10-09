@@ -140,6 +140,9 @@ class ReplayMetadata(ReplayModel):
     feature must not make possible.
     """
 
+    source: Literal["LIVE", "REPLAYED_LIVE", "MOCK_DEMO", "UNVERIFIED_REPLAY"] = "LIVE"
+    reused_roles: list[str] = Field(default_factory=list, alias="reusedRoles")
+    stage_provenance: dict[str, dict[str, str | None]] = Field(default_factory=dict, alias="stageProvenance")
     mode: ReplayMode = NO_REPLAY
     replayed: bool = False
     # camelCase on the wire, like every other multi-word field in this API. The

@@ -255,6 +255,7 @@ class ReplayArtifactBase(ReplayModel):
         return (
             self.captured_mode == "real"
             and bool(self.captured_provider)
+            and self.captured_provider != "mock"
             and bool(self.captured_model)
         )
 

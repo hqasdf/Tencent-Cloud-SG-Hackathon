@@ -44,6 +44,8 @@ _write_intake.py
 
 # Local live-validation probes, credentials, transcripts, and generated results.
 /backend/.live-validation/
+/backend/agent_checkpoints/
+/backend/.pytest-scratch/
 /.workbuddy-ai/memory/
 
 # Environment variants and local credentials; retain shareable examples.

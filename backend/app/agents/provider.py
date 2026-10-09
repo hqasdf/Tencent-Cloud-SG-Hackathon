@@ -99,6 +99,7 @@ class LlmCompletion:
     total_tokens: int | None = None
     finish_reason: str | None = None
     attempt_count: int = 1
+    reused: bool = False
     """HTTP attempts made for this completion. 1 means it succeeded first try.
 
     Recorded so the benchmark can report retry cost separately from model

@@ -79,6 +79,7 @@ from app.services.counterfactual import CounterfactualService
 from app.services.explanation import DecisionExplanationService
 from app.services.rebuttal_orchestrator import RebuttalOrchestratorService
 from app.services.workflow_state import build_workflow_state
+from app.services.agent_checkpoints import AgentCheckpointStore, CheckpointSession, run_checked
 
 JUDGE_STAGE = "JUDGE"
 
@@ -136,6 +137,25 @@ class ResolutionOrchestratorService:
         *,
         replay_mode: ReplayMode = NO_REPLAY,
         capture_stages: frozenset[str] = frozenset(),
+        resume: bool = False,
+        checkpoint_store: AgentCheckpointStore | None = None,
+    ) -> CaseResolutionResponse:
+        if resume and replay_mode == NO_REPLAY:
+            store = checkpoint_store or AgentCheckpointStore()
+            with store.session(case.id, self._settings, self._provider_name(),
+                               deterministic_analysis_hash(case, analysis)) as checkpoints:
+                return self._run(case, analysis, replay_mode=replay_mode,
+                                 capture_stages=capture_stages, checkpoints=checkpoints)
+        return self._run(case, analysis, replay_mode=replay_mode, capture_stages=capture_stages)
+
+    def _run(
+        self,
+        case: DisputeCase,
+        analysis: CaseAnalysisResponse,
+        *,
+        replay_mode: ReplayMode = NO_REPLAY,
+        capture_stages: frozenset[str] = frozenset(),
+        checkpoints: CheckpointSession | None = None,
     ) -> CaseResolutionResponse:
         """Run the pipeline, optionally serving some AI stages from storage.
 
@@ -163,7 +183,9 @@ class ResolutionOrchestratorService:
             )
             provenance["ADVOCATES"] = advocate_artifact
         else:
-            outcome = self._advocates.run_with_raw(case, analysis, context)
+            outcome = self._advocates.run_with_raw(
+                case, analysis, context, **({"checkpoints": checkpoints} if checkpoints else {})
+            )
             advocate_run = outcome.response
             if "ADVOCATES" in capture_stages:
                 # Captured only after verification has run, so an artefact never
@@ -177,12 +199,13 @@ class ResolutionOrchestratorService:
         # is unrepresentable rather than merely disabled.
         if plan.rebuttals_replayed:
             rebuttal_run, rebuttal_artifact = self._replays.replay_rebuttals(
-                case, analysis, context, advocate_run, audit
+                case, analysis, context, advocate_run, audit,
             )
             provenance["REBUTTALS"] = rebuttal_artifact
         else:
             rebuttal_outcome = self._rebuttals.run_with_raw(
-                case, analysis, context, advocate_run, audit
+                case, analysis, context, advocate_run, audit,
+                **({"checkpoints": checkpoints} if checkpoints else {}),
             )
             rebuttal_run = rebuttal_outcome.response
             if "REBUTTALS" in capture_stages:
@@ -214,6 +237,7 @@ class ResolutionOrchestratorService:
             capture="JUDGE" in capture_stages,
             provenance=provenance,
             blocked=blocked_sides,
+            checkpoints=checkpoints,
         )
         _mark(pipeline, JUDGE_STAGE, _stage_status(judge_result.status))
 
@@ -221,6 +245,10 @@ class ResolutionOrchestratorService:
         explanation = self._explanations.build(
             analysis, advocate_run, rebuttal_run, judge_result
         )
+
+        if checkpoints:
+            for role, event in checkpoints.events.items():
+                audit.record("AGENT_CHECKPOINT", role=role, outcome=event)
 
         return CaseResolutionResponse(
             case_id=case.id,
@@ -237,7 +265,7 @@ class ResolutionOrchestratorService:
             # AI's advice agreed with the code's decision.
             explanation=explanation,
             counterfactual=self._counterfactuals.build(analysis),
-            replay_metadata=_replay_metadata(plan, current_hash, provenance),
+            replay_metadata=_replay_metadata(plan, current_hash, provenance, self._settings, checkpoints),
             pipeline=pipeline,
             workflow=build_workflow_state(
                 advocate_run=advocate_run,
@@ -263,6 +291,7 @@ class ResolutionOrchestratorService:
         capture: bool = False,
         provenance: dict[str, object] | None = None,
         blocked: list[str] | None,
+        checkpoints: CheckpointSession | None = None,
     ) -> JudgeResult:
         if blocked is not None:
             audit.record(
@@ -321,7 +350,11 @@ class ResolutionOrchestratorService:
                 JUDGE_STARTED, provider=self._provider_name(), mode=self._settings.mode
             )
             try:
-                decision = self._judge_agent().judge_with_trace(context)
+                agent = self._judge_agent()
+                decision = run_checked(
+                    checkpoints, "JUDGE", context, lambda: agent.judge_with_trace(context),
+                    agent._parse, lambda output: self._judge_validation.validate(output, context).valid,
+                )
             except (LlmProviderError, JudgeAgentError) as error:
                 return self._failed(error, started, audit, context)
             except Exception as error:  # noqa: BLE001 - isolation boundary
@@ -426,7 +459,9 @@ class ResolutionOrchestratorService:
             status="FAILED",
             recommended_outcome=None,
             failure_reason=_safe_failure_reason(error),
-            execution=_completion_metadata(completion, self._settings, started),
+            execution=_completion_metadata(completion, self._settings, started).model_copy(
+                update={"failure_code": code}
+            ),
         )
 
     # -- deterministic layer ---------------------------------------------
@@ -460,6 +495,7 @@ def _completion_metadata(
             duration_ms=int(((time.monotonic() - started) * 1000)) if started else 0,
         )
     return AgentCallMetadata(
+        reused=getattr(completion, "reused", False),
         provider=getattr(completion, "provider_name", settings.provider),
         model=getattr(completion, "model_name", None),
         duration_ms=getattr(completion, "duration_ms", 0),
@@ -541,7 +577,8 @@ _REPLAYED_STAGE_LABELS: dict[str, str] = {
 
 
 def _replay_metadata(
-    plan: ReplayPlan, current_hash: str, provenance: dict[str, object]
+    plan: ReplayPlan, current_hash: str, provenance: dict[str, object],
+    settings: AgentSettings | None = None, checkpoints: CheckpointSession | None = None,
 ) -> ReplayMetadata:
     """Describe where this run's AI material came from.
 
@@ -550,7 +587,19 @@ def _replay_metadata(
     statements and only one of them is safe to assume.
     """
     if plan.mode == NO_REPLAY:
-        return ReplayMetadata.live(current_analysis_hash=current_hash)
+        result = ReplayMetadata.live(current_analysis_hash=current_hash)
+        reused = [role for role, event in checkpoints.events.items() if event == "REUSED"] if checkpoints else []
+        result.reused_roles = reused
+        # ``replayed`` remains reserved for explicit historical replay. Role
+        # recovery is represented by ``source`` and ``reusedRoles`` so existing
+        # clients do not confuse an ordinary Retry with replay mode.
+        result.advocates_replayed = any(role.endswith("_ADVOCATE") for role in reused)
+        result.rebuttals_replayed = any(role.endswith("_REBUTTAL") for role in reused)
+        result.judge_replayed = "JUDGE" in reused
+        result.source = "MOCK_DEMO" if settings and settings.mode == "mock" else ("REPLAYED_LIVE" if reused else "LIVE")
+        if reused:
+            result.note = "Validated per-role checkpoints reused: " + ", ".join(reused) + ". Other incomplete roles were attempted; deterministic outcomes were recomputed."
+        return result
 
     artifacts = [artifact for artifact in provenance.values() if artifact is not None]
     first = artifacts[0] if artifacts else None
@@ -560,6 +609,12 @@ def _replay_metadata(
         if stage in provenance
     )
     return ReplayMetadata(
+        source=("MOCK_DEMO" if any(getattr(a, "captured_mode", None) == "mock" or getattr(a, "provider", None) == "mock" for a in artifacts)
+                else "REPLAYED_LIVE" if artifacts and all(getattr(a, "captured_mode", None) == "real" and getattr(a, "provider", None) and getattr(a, "model", None) for a in artifacts)
+                else "UNVERIFIED_REPLAY"),
+        stage_provenance={stage: {"mode": getattr(a, "captured_mode", None),
+                                 "provider": getattr(a, "provider", None),
+                                 "model": getattr(a, "model", None)} for stage, a in provenance.items()},
         mode=plan.mode,
         replayed=True,
         advocates_replayed=plan.advocates_replayed,
