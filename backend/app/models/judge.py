@@ -46,6 +46,7 @@ from app.models.agent import (
 from app.models.explanation import DecisionCounterfactual, DecisionExplanation
 from app.models.rebuttal import RebuttalRunResponse, VerifiedRebuttal
 from app.models.replay import ReplayMetadata
+from app.models.workflow import WorkflowState
 
 JudgeModelBase = BaseModel
 
@@ -501,6 +502,16 @@ class CaseResolutionResponse(JudgeModel):
         ),
     )
     pipeline: list[PipelineStage] = Field(default_factory=list)
+    workflow: WorkflowState | None = Field(
+        default=None,
+        description=(
+            "The authoritative workflow state machine for this run. The "
+            "frontend renders this rather than inferring status from the "
+            "presence of a result object, so a stage that was BLOCKED can "
+            "never be presented as done. Optional only so older stored "
+            "responses remain loadable."
+        ),
+    )
     audit: list[AuditEvent] = Field(default_factory=list)
 
 

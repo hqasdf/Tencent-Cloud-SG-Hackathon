@@ -645,7 +645,13 @@ def test_each_call_uses_the_real_context_and_prompt() -> None:
     _run_with(provider)
     for request in provider.requests:
         assert "trusted case context" in request.user_prompt
-        assert "Required output schema" in request.system_prompt
+        # The schema is no longer pasted into the prompt: it travels as the
+        # request's structured-output constraint. The production-prompt check
+        # therefore looks for the output contract, which is what the prompt still
+        # carries, and for the schema on the request itself.
+        assert "Stop immediately after the closing brace." in request.system_prompt
+        assert request.response_schema is not None
+        assert "claims" in request.response_schema.get("properties", {})
         assert "context_json" in request.metadata
         context = json.loads(request.metadata["context_json"])
         assert context["caseId"] in {"DISP-005", "DISP-002"}

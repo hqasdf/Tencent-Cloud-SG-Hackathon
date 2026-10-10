@@ -158,6 +158,7 @@ class AgentCallMetadata(AgentModel):
     mean very different things when comparing models.
     """
 
+    reused: bool = False
     provider: str
     model: str | None = None
     duration_ms: int = Field(default=0, serialization_alias="durationMs", validation_alias="durationMs")

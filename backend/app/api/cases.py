@@ -11,6 +11,7 @@ from app.replay.service import ReplayRefused
 from app.repositories.case_repository import MockCaseRepository
 from app.services.case_replay import CaseReplayValidationError
 from app.services.case_service import CaseNotFoundError, CaseService
+from app.services.agent_checkpoints import CheckpointBusy, CheckpointStorageError
 
 router = APIRouter(prefix="/api", tags=["cases"])
 
@@ -103,6 +104,10 @@ def run_case_resolution(
         )
     try:
         return service.get_resolution_run(case_id, replay_mode=mode)
+    except CheckpointBusy as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except CheckpointStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     except ReplayRefused as error:
         # A refused replay is reported, never silently replaced by a live run.
         raise HTTPException(

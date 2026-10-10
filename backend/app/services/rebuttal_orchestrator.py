@@ -57,6 +57,7 @@ from app.services.audit import (
     SIDE_EVENTS,
     AuditTrail,
 )
+from app.services.agent_checkpoints import CheckpointSession, run_checked
 
 RIDER_REBUTTAL_STAGE = "RIDER_REBUTTAL"
 DRIVER_REBUTTAL_STAGE = "DRIVER_REBUTTAL"
@@ -133,6 +134,7 @@ class RebuttalOrchestratorService:
         advocate_context: AgentCaseContext,
         advocate_run: AdvocateRunResponse,
         audit: AuditTrail | None = None,
+        *, checkpoints: CheckpointSession | None = None,
     ) -> RebuttalRunOutcome:
         """``run``, plus each side's raw rebuttal output for replay capture.
 
@@ -190,6 +192,7 @@ class RebuttalOrchestratorService:
             provider,
             pipeline,
             audit,
+            checkpoints,
         )
         driver, driver_raw = self._run_side(
             case,
@@ -200,6 +203,7 @@ class RebuttalOrchestratorService:
             provider,
             pipeline,
             audit,
+            checkpoints,
         )
 
         # Verification ran for whichever sides produced output. It is reported as
@@ -253,6 +257,7 @@ class RebuttalOrchestratorService:
         provider: LlmProvider,
         pipeline: list[PipelineStage],
         audit: AuditTrail | None,
+        checkpoints: CheckpointSession | None = None,
     ) -> tuple[RebuttalSideResult, RebuttalOutput | None]:
         """Run one rebuttal in isolation. Failure never propagates outward."""
         stage = RIDER_REBUTTAL_STAGE if side == "RIDER" else DRIVER_REBUTTAL_STAGE
@@ -281,7 +286,11 @@ class RebuttalOrchestratorService:
             )
 
         try:
-            argument = agent.rebut_with_trace(context)
+            argument = run_checked(
+                checkpoints, stage, context, lambda: agent.rebut_with_trace(context),
+                lambda text, completion: agent._parse(text, side, completion),
+                lambda output: not self._validation.validate(output, context).rejected_rebuttals,
+            )
         except (LlmProviderError, RebuttalAgentError) as error:
             _mark(pipeline, stage, "FAILED")
             if audit is not None:
@@ -357,6 +366,7 @@ class RebuttalOrchestratorService:
                 rejected_rebuttals=outcome.rejected_rebuttals,
                 conceded_target_ids=outcome.conceded_target_ids(),
                 execution=AgentCallMetadata(
+                    reused=completion.reused,
                     provider=completion.provider_name,
                     model=completion.model_name,
                     duration_ms=completion.duration_ms,

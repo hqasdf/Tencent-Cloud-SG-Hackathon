@@ -21,6 +21,7 @@ from app.models.advocate import (
 from app.models.analysis import CaseAnalysisResponse
 from app.models.agent import AgentCallMetadata, AgentCaseContext, AgentRunMetadata
 from app.models.case import DisputeCase
+from app.services.agent_checkpoints import CheckpointSession, run_checked
 
 JUDGE_STAGE = "JUDGE"
 
@@ -100,6 +101,7 @@ class AdvocateOrchestratorService:
         case: DisputeCase,
         analysis: CaseAnalysisResponse,
         context: AgentCaseContext | None = None,
+        *, checkpoints: CheckpointSession | None = None,
     ) -> AdvocateRunOutcome:
         """``run``, plus the raw model output for each side that produced one.
 
@@ -131,10 +133,10 @@ class AdvocateOrchestratorService:
 
         # 5-6. Independent execution. Neither agent sees the other's output.
         rider_result, rider_raw = self._run_side(
-            rider_agent, context, pipeline, "RIDER_ADVOCATE"
+            rider_agent, context, pipeline, "RIDER_ADVOCATE", checkpoints
         )
         driver_result, driver_raw = self._run_side(
-            driver_agent, context, pipeline, "DRIVER_ADVOCATE"
+            driver_agent, context, pipeline, "DRIVER_ADVOCATE", checkpoints
         )
 
         _mark(
@@ -198,12 +200,16 @@ class AdvocateOrchestratorService:
         context: AgentCaseContext,
         pipeline: list[PipelineStage],
         stage: str,
+        checkpoints: CheckpointSession | None = None,
     ) -> tuple[AdvocateSideResult, AdvocateOutput | None]:
         """Run one advocate in isolation. Failure never propagates outward."""
         side = agent.side
         started = time.monotonic()
         try:
-            argument = agent.argue_with_trace(context)
+            argument = run_checked(
+                checkpoints, stage, context, lambda: agent.argue_with_trace(context),
+                agent._parse, lambda output: not self._verification.verify(output, context).rejected_claims,
+            )
         except (LlmProviderError, AdvocateAgentError) as error:
             _mark(pipeline, stage, "FAILED")
             return (
@@ -243,6 +249,7 @@ class AdvocateOrchestratorService:
                 rejected_claims=outcome.rejected_claims,
                 warnings=outcome.warnings,
                 execution=AgentCallMetadata(
+                    reused=completion.reused,
                     provider=completion.provider_name,
                     model=completion.model_name,
                     duration_ms=completion.duration_ms,

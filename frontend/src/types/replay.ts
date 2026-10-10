@@ -11,6 +11,9 @@
 export type ReplayMode = "NONE" | "ADVOCATES" | "ADVOCATES_AND_REBUTTALS" | "FULL_AI";
 
 export interface ReplayMetadata {
+  source: "LIVE" | "REPLAYED_LIVE" | "MOCK_DEMO" | "UNVERIFIED_REPLAY";
+  reusedRoles: string[];
+  stageProvenance: Record<string, { mode: string | null; provider: string | null; model: string | null }>;
   mode: ReplayMode;
   /** True when at least one AI stage was served from a stored artefact. */
   replayed: boolean;

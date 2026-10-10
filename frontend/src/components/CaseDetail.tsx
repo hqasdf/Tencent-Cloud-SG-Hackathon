@@ -12,6 +12,8 @@ import { ReplayBadge, ReplayInvalidBadge } from "./ReplayBadge";
 import { AuditTrail, DeterministicOutcomePanel, JudgeAdvisoryPanel } from "./JudgePanel";
 import { DeterministicAnalysisPanel } from "./DeterministicAnalysis";
 import { StepPending, WorkflowRail, WorkflowStep, type StepState } from "./WorkflowStep";
+import { bothSettledOk, isSettledNotOk, isSettledOk } from "../types/workflow";
+import type { SideStages, StageState } from "../types/workflow";
 import { labelize, money } from "../utils/format";
 
 /**
@@ -29,11 +31,9 @@ import { labelize, money } from "../utils/format";
  *  - One primary action. "Run full analysis" appears exactly once, in the
  *    toolbar. The cheaper advocates-only path is a subordinate ghost button
  *    beside it and disappears once a full run exists.
- *  - Every number has one home. The deterministic outcome is stated in step 7
- *    and nowhere else; confidence is stated in step 3 and nowhere else. The
- *    fixture's pre-computed `resolution`, `confidence` and `activity` fields are
- *    deliberately NOT rendered — the live pipeline supersedes them, and showing
- *    both is what created the duplicates.
+ *  - Every number has one home. The deterministic outcome is stated in the
+ *    decision step and nowhere else; confidence is stated in the facts step
+ *    and nowhere else.
  *  - No internal stage names. "Stage 4", "Stage 5", "Stage 6" and "the panel
  *    above" are developer vocabulary; the steps are named after what the
  *    operator is looking at.
@@ -106,6 +106,10 @@ const TOTAL_STEPS = STEPS.length;
 
 /** Where the full-analysis result is produced, so a finished run can jump here. */
 const FIRST_LIVE_STEP = 5;
+
+// ---------------------------------------------------------------------------
+// Intake analysis helpers
+// ---------------------------------------------------------------------------
 
 /** Extract party statements from the intake case's final analysis, if present. */
 function extractPartyStatements(intakeCase: IntakeCase | null): PartyStatement[] {
@@ -266,6 +270,10 @@ function IntakeAnalysisSummary({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function CaseDetail({
   caseData,
   analysis,
@@ -302,7 +310,7 @@ export function CaseDetail({
   useEffect(() => {
     if (!intakeCase || intakeCase.lifecycle !== "READY_FOR_ANALYSIS") return;
     let cancelled = false;
-    void intakeService.analyse(intakeCase.id).then((analysis) => {
+    void intakeService.analyse(intakeCase.id).then(() => {
       if (cancelled) return;
       // The analysis is saved server-side; refresh the intake case to load
       // finalAnalysis with party statements and contradictions.
@@ -333,17 +341,81 @@ export function CaseDetail({
 
   const hasArguments = resolutionRun !== null || advocateRun !== null;
 
+  /**
+   * The backend's own verdict on each stage. When it is present it is the only
+   * input to step state — the UI does not infer anything from the fact that a
+   * response object exists.
+   */
+  const workflow = resolutionRun?.workflow ?? null;
+  const aiIncomplete = workflow !== null && !bothSettledOk(workflow.advocates);
+
+  /**
+   * One stage's status, as the backend reported it.
+   *
+   * `PENDING_HUMAN_REVIEW` is "done": the stage ran, and code decided a human
+   * must sign off. `BLOCKED` and `SKIPPED` are not "failed" — nothing was
+   * attempted, so the fault is upstream and the wording must not imply that
+   * this stage went wrong.
+   */
+  function fromStage(state: StageState | undefined, fallback: StepState): StepState {
+    if (!state) return fallback;
+    switch (state.status) {
+      case "COMPLETE":
+      case "PENDING_HUMAN_REVIEW":
+        return "done";
+      case "FAILED":
+        return "failed";
+      case "BLOCKED":
+      case "SKIPPED":
+        return "blocked";
+      default:
+        return "waiting";
+    }
+  }
+
+  /** A paired stage counts as done only when BOTH sides produced a result. */
+  function fromPair(sides: SideStages | undefined, fallback: StepState): StepState {
+    if (!sides) return fallback;
+    if (sides.rider.status === "FAILED" || sides.driver.status === "FAILED") return "failed";
+    if (isSettledNotOk(sides.rider) || isSettledNotOk(sides.driver)) return "blocked";
+    if (isSettledOk(sides.rider) && isSettledOk(sides.driver)) return "done";
+    return "waiting";
+  }
+
   function stateFor(index: number): StepState {
     // Step 1: AI intake
     if (index === 1) return intakeComplete ? "done" : "ready";
-    // Steps 2-4: case review, evidence, facts — always available (static data)
-    if (index <= 4) return "done";
-    // Step 5+: live analysis steps
-    if (index === FIRST_LIVE_STEP) return hasArguments ? "done" : "ready";
-    return resolutionRun ? "done" : "waiting";
+    // Steps 2-3: case review, evidence — always available (static data)
+    if (index <= 3) return "done";
+    // Step 4: deterministic analysis (facts)
+    if (index === 4) return fromStage(workflow?.deterministic, "done");
+    // Step 5: advocates
+    if (index === 5) {
+      return workflow ? fromPair(workflow.advocates, "ready") : hasArguments ? "done" : "ready";
+    }
+    // Without a state machine there is no evidence that a later stage ran, so
+    // the honest answer is "not run" rather than the optimistic "done".
+    if (!workflow) return "waiting";
+    // Step 6: rebuttals
+    if (index === 6) return fromPair(workflow.rebuttals, "waiting");
+    // Step 7: judge
+    if (index === 7) return fromStage(workflow.judge, "waiting");
+    // Step 8: final resolution / decision
+    if (index === 8) return fromStage(workflow.finalResolution, "waiting");
+    // Step 9: explanation
+    return fromStage(workflow.explanation, "waiting");
   }
 
-  const doneCount = STEPS.filter((_, position) => stateFor(position + 1) === "done").length;
+  const stepStates = STEPS.map((_, position) => stateFor(position + 1));
+  const doneCount = stepStates.filter((state) => state === "done").length;
+  const failedCount = stepStates.filter((state) => state === "failed").length;
+  const blockedCount = stepStates.filter((state) => state === "blocked").length;
+
+  /**
+   * Pill text for the two steps whose label describes a condition, not a state.
+   */
+  const startLabel = stateFor(5) === "ready" ? "Start here" : undefined;
+  const judgeLabel = stateFor(7) === "done" ? "Advisory" : undefined;
   const statusTone =
     caseData.status === "Auto Resolved" ? "auto" : caseData.status === "Human Review" ? "review" : "neutral";
 
@@ -367,7 +439,13 @@ export function CaseDetail({
         <div className="workflow-toolbar-left">
           <strong>Dispute workflow</strong>
           <span className="workflow-progress">
-            <b>{doneCount}</b> of {TOTAL_STEPS} steps ready
+            <b>{doneCount}</b> of {TOTAL_STEPS} steps complete
+            {failedCount > 0 && (
+              <em className="workflow-flag failed">{failedCount} failed</em>
+            )}
+            {blockedCount > 0 && (
+              <em className="workflow-flag blocked">{blockedCount} blocked</em>
+            )}
           </span>
         </div>
         <div className="workflow-toolbar-actions">
@@ -384,7 +462,7 @@ export function CaseDetail({
               <ReplayInvalidBadge metadata={resolutionRun.replayMetadata} />
               {!resolutionRun.replayMetadata.replayed && (
                 <span className={`mode-badge ${resolutionRun.agentRun.mode}`}>
-                  {resolutionRun.agentRun.mode === "real" ? "REAL MODEL" : "MOCK"}
+                  {resolutionRun.replayMetadata.source === "MOCK_DEMO" ? "MOCK DEMO" : "LIVE"}
                 </span>
               )}
             </>
@@ -395,7 +473,7 @@ export function CaseDetail({
           ) : null}
 
           <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning}>
-            {resolutionRunning ? "Running analysis…" : resolutionRun ? "Run again" : "Run full analysis"}
+            {resolutionRunning ? "Running analysis…" : resolutionRun ? "Retry / reuse completed work" : "Run full analysis"}
           </button>
 
           {/* The cheaper two-call path. Subordinate, and only offered before a
@@ -417,9 +495,24 @@ export function CaseDetail({
         <p className="workflow-alert">{resolutionError ?? advocateError}</p>
       )}
 
+      {/*
+        One plain-language statement of what the AI half of the pipeline could
+        not do. Without it, an operator reading a case whose advocates failed
+        sees an empty arguments panel and an empty Judge panel and has to infer
+        the cause from two separate step bodies.
+      */}
+      {aiIncomplete && (
+        <p className="workflow-notice" role="status">
+          <b>The AI stages did not complete for this case.</b> Cross-examination and the
+          Judge&rsquo;s view could not run, so there is no AI recommendation. The decision and
+          the explanation below are calculated by code and are unaffected.
+        </p>
+      )}
+
       <WorkflowRail steps={STEPS} stateFor={stateFor} current={openStep} onSelect={setOpenStep} />
 
       <div className="workflow">
+        {/* Step 1: AI intake interviews */}
         <WorkflowStep
           index={1}
           total={TOTAL_STEPS}
@@ -442,6 +535,7 @@ export function CaseDetail({
           />
         </WorkflowStep>
 
+        {/* Step 2: Review the case */}
         <WorkflowStep
           index={2}
           total={TOTAL_STEPS}
@@ -497,6 +591,7 @@ export function CaseDetail({
           <PartyContradictionBanner contradictions={partyContradictions} />
         </WorkflowStep>
 
+        {/* Step 3: Examine the evidence */}
         <WorkflowStep
           index={3}
           total={TOTAL_STEPS}
@@ -558,6 +653,7 @@ export function CaseDetail({
           </section>
         </WorkflowStep>
 
+        {/* Step 4: Check the facts */}
         <WorkflowStep
           index={4}
           total={TOTAL_STEPS}
@@ -578,13 +674,14 @@ export function CaseDetail({
           )}
         </WorkflowStep>
 
+        {/* Step 5: Read the arguments */}
         <WorkflowStep
           index={5}
           total={TOTAL_STEPS}
           title={STEPS[4].title}
           summary={STEPS[4].summary}
           state={stateFor(5)}
-          stateLabel={hasArguments ? undefined : "Ready to run"}
+          stateLabel={startLabel}
           open={openStep === 5}
           onToggle={() => toggle(5)}
           onPrev={() => setOpenStep(4)}
@@ -620,6 +717,7 @@ export function CaseDetail({
           )}
         </WorkflowStep>
 
+        {/* Step 6: Cross-examination */}
         <WorkflowStep
           index={6}
           total={TOTAL_STEPS}
@@ -641,13 +739,14 @@ export function CaseDetail({
           )}
         </WorkflowStep>
 
+        {/* Step 7: The Judge's view */}
         <WorkflowStep
           index={7}
           total={TOTAL_STEPS}
           title={STEPS[6].title}
           summary={STEPS[6].summary}
           state={stateFor(7)}
-          stateLabel={resolutionRun ? "Advisory" : undefined}
+          stateLabel={judgeLabel}
           open={openStep === 7}
           onToggle={() => toggle(7)}
           onPrev={() => setOpenStep(6)}
@@ -664,6 +763,7 @@ export function CaseDetail({
           )}
         </WorkflowStep>
 
+        {/* Step 8: The decision */}
         <WorkflowStep
           index={8}
           total={TOTAL_STEPS}
@@ -679,6 +779,15 @@ export function CaseDetail({
             <>
               <PartyContradictionBanner contradictions={partyContradictions} />
               <DeterministicOutcomePanel resolution={resolutionRun.deterministicResolution} />
+              {/*
+                Not `caseData.humanReviewSummary`. That field is the server's
+                "Deterministic escalation reasons: A, B, C" string, which is the
+                same list the outcome panel above already renders — and renders
+                in readable words rather than raw enum codes. Showing both was
+                the duplicate this redesign set out to remove. What is genuinely
+                missing for an operator is the consequence, so that is what this
+                states instead.
+              */}
               {resolutionRun.deterministicResolution.resolutionMode === "HUMAN_REVIEW" && (
                 <section className="human-review">
                   <span className="eyebrow">Action required</span>
@@ -698,6 +807,7 @@ export function CaseDetail({
           )}
         </WorkflowStep>
 
+        {/* Step 9: Why this decision */}
         <WorkflowStep
           index={9}
           total={TOTAL_STEPS}

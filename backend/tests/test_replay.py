@@ -1029,6 +1029,9 @@ def test_replay_metadata_uses_the_documented_wire_names(captured):
     wire = result.model_dump(by_alias=True, mode="json")["replayMetadata"]
 
     assert set(wire) == {
+        "source",
+        "reusedRoles",
+        "stageProvenance",
         "mode",
         "replayed",
         "advocatesReplayed",
