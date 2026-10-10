@@ -3,6 +3,7 @@ export type Sender = "user" | "assistant";
 export type IntakeLifecycle =
   | "RIDER_INTERVIEW"
   | "DRIVER_INTERVIEW"
+  | "RIDER_REBUTTAL"
   | "READY_FOR_ANALYSIS"
   | "ANALYSING"
   | "AUTO_RESOLVED"

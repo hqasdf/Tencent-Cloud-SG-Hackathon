@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 from app.data.trip_mapping import get_source_case
-from app.models.analysis import CaseAnalysisResponse
+from app.models.analysis import (
+    CaseAnalysisResponse,
+    PartyContradiction,
+    PartyStatement,
+)
+from app.models.intake import PartyFact
+from app.policies import CONFIDENCE_POLICY_V1
 from app.repositories.intake_repository import IntakeCaseRepository
 from app.services.case_replay import CaseReplayService
 from app.services.dispute_analysis import DisputeAnalysisService
 from app.services.evidence_validation import EvidenceValidationService
+
+
+# How much extra confidence penalty to apply per party contradiction
+_PARTY_CONTRADICTION_PENALTY = 0.15
 
 
 class IntakeAnalysisError(Exception):
@@ -15,7 +25,17 @@ class IntakeAnalysisError(Exception):
 class IntakeAnalysisService:
     """Verifies both interviews are complete, loads the selected synthetic source
     case, invokes the current DisputeAnalysisService, and saves the returned
-    analysis. It does NOT treat party statements as verified evidence."""
+    analysis.
+
+    After the deterministic engine produces its result, this service:
+
+    * Attaches the rider and driver party statements (B) so a human reviewer
+      or the Judge step can see what each party actually said during intake.
+    * Detects contradictions between rider and driver claims on the same fact
+      key (C). When contradictions are found, the confidence score is lowered
+      and the case is forced to HUMAN_REVIEW with a ``PARTY_CONTRADICTION``
+      escalation reason.
+    """
 
     def __init__(
         self,
@@ -74,6 +94,37 @@ class IntakeAnalysisService:
         # Run the existing deterministic analysis
         analysis = self._dispute_analysis.analyze(validated_case)
 
+        # --- B: Attach party statements from the intake interviews ---
+        party_statements = _build_party_statements(case.rider_state, case.driver_state)
+
+        # --- C: Detect contradictions between rider and driver claims ---
+        contradictions = _detect_contradictions(case.rider_state, case.driver_state)
+
+        if contradictions:
+            # Lower the confidence score
+            penalty = _PARTY_CONTRADICTION_PENALTY * len(contradictions)
+            adjusted_confidence = max(
+                0.0,
+                analysis.confidence.overall_confidence - penalty,
+            )
+            analysis = analysis.model_copy(update={
+                "confidence": analysis.confidence.model_copy(update={
+                    "overall_confidence": round(adjusted_confidence, 2),
+                    "contradiction_penalty": round(
+                        analysis.confidence.contradiction_penalty + penalty, 2
+                    ),
+                }),
+                # Force human review when parties contradict each other
+                "resolution_mode": "HUMAN_REVIEW",
+                "escalation_reasons": analysis.escalation_reasons + ["PARTY_CONTRADICTION"],
+            })
+
+        # Attach the party statements and contradictions to the response
+        analysis = analysis.model_copy(update={
+            "party_statements": party_statements,
+            "party_contradictions": contradictions,
+        })
+
         # Save the analysis
         analysis_dict = analysis.model_dump(by_alias=True, mode="json")
         self._repository.save_analysis(
@@ -94,3 +145,66 @@ class IntakeAnalysisService:
             )
 
         return analysis
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _facts_to_dicts(facts: list[PartyFact]) -> list[dict]:
+    """Convert PartyFact objects to plain dicts for serialization."""
+    return [{"key": f.key, "value": f.value, "statedBy": f.stated_by} for f in facts]
+
+
+def _build_party_statements(
+    rider_state: object | None,
+    driver_state: object | None,
+) -> list[PartyStatement]:
+    """Build PartyStatement objects from the intake interview states."""
+    statements: list[PartyStatement] = []
+    if rider_state is not None and rider_state.facts:
+        statements.append(PartyStatement(
+            party="rider",
+            facts=_facts_to_dicts(rider_state.facts),
+        ))
+    if driver_state is not None and driver_state.facts:
+        statements.append(PartyStatement(
+            party="driver",
+            facts=_facts_to_dicts(driver_state.facts),
+        ))
+    return statements
+
+
+def _build_fact_map(state: object | None) -> dict[str, str]:
+    """Map fact key → fact value for one party's interview state."""
+    if state is None or not state.facts:
+        return {}
+    return {f.key.lower(): f.value for f in state.facts}
+
+
+def _detect_contradictions(
+    rider_state: object | None,
+    driver_state: object | None,
+) -> list[PartyContradiction]:
+    """Find fact keys where both parties gave a value but they disagree.
+
+    A contradiction is when both parties stated a fact with the same key, but
+    the values differ (case-insensitive comparison). Facts only stated by one
+    party are NOT contradictions — they're just one-sided claims.
+    """
+    rider_facts = _build_fact_map(rider_state)
+    driver_facts = _build_fact_map(driver_state)
+
+    contradictions: list[PartyContradiction] = []
+    for key in rider_facts:
+        if key in driver_facts:
+            rider_val = rider_facts[key]
+            driver_val = driver_facts[key]
+            if rider_val.strip().lower() != driver_val.strip().lower():
+                contradictions.append(PartyContradiction(
+                    fact_key=key,
+                    rider_claim=rider_val,
+                    driver_claim=driver_val,
+                ))
+    return contradictions

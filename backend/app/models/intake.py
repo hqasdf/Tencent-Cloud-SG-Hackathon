@@ -14,6 +14,7 @@ Sender = Literal["user", "assistant"]
 IntakeLifecycle = Literal[
     "RIDER_INTERVIEW",
     "DRIVER_INTERVIEW",
+    "RIDER_REBUTTAL",
     "READY_FOR_ANALYSIS",
     "ANALYSING",
     "AUTO_RESOLVED",

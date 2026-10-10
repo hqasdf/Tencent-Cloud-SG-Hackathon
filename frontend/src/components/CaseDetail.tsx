@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import type { CaseAnalysis, DisputeCase } from "../types/dispute";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CaseAnalysis, DisputeCase, PartyStatement, PartyContradiction } from "../types/dispute";
 import type { AdvocateRunResult } from "../types/advocate";
+import type { IntakeCase } from "../types/intake";
 import type { ResolutionRunResult } from "../services/caseService";
+import { intakeService } from "../services/intakeService";
 import { AdvocateArguments } from "./AdvocateRun";
 import { CrossExaminationPanel, TrustSequence } from "./CrossExaminationPanel";
 import { ExplanationPanel } from "./ExplanationPanel";
+import { IntakeChatPanel } from "./IntakeChatPanel";
 import { ReplayBadge, ReplayInvalidBadge } from "./ReplayBadge";
 import { AuditTrail, DeterministicOutcomePanel, JudgeAdvisoryPanel } from "./JudgePanel";
 import { DeterministicAnalysisPanel } from "./DeterministicAnalysis";
@@ -53,6 +56,11 @@ export interface CaseDetailProps {
 
 const STEPS: { title: string; short: string; summary: string }[] = [
   {
+    title: "AI intake interviews",
+    short: "AI intake",
+    summary: "The AI interviews the rider and driver to gather each side's account."
+  },
+  {
     title: "Review the case",
     short: "The case",
     summary: "What the rider and the driver each say, and the trip record."
@@ -97,7 +105,166 @@ const STEPS: { title: string; short: string; summary: string }[] = [
 const TOTAL_STEPS = STEPS.length;
 
 /** Where the full-analysis result is produced, so a finished run can jump here. */
-const FIRST_LIVE_STEP = 4;
+const FIRST_LIVE_STEP = 5;
+
+/** Extract party statements from the intake case's final analysis, if present. */
+function extractPartyStatements(intakeCase: IntakeCase | null): PartyStatement[] {
+  if (!intakeCase?.finalAnalysis) return [];
+  const fa = intakeCase.finalAnalysis as Record<string, unknown>;
+  const raw = fa.partyStatements;
+  if (!Array.isArray(raw)) return [];
+  return raw as PartyStatement[];
+}
+
+/** Extract party contradictions from the intake case's final analysis, if present. */
+function extractPartyContradictions(intakeCase: IntakeCase | null): PartyContradiction[] {
+  if (!intakeCase?.finalAnalysis) return [];
+  const fa = intakeCase.finalAnalysis as Record<string, unknown>;
+  const raw = fa.partyContradictions;
+  if (!Array.isArray(raw)) return [];
+  return raw as PartyContradiction[];
+}
+
+/** Extract the full intake analysis object from the intake case, if present. */
+function extractIntakeAnalysis(intakeCase: IntakeCase | null): Record<string, unknown> | null {
+  if (!intakeCase?.finalAnalysis) return null;
+  return intakeCase.finalAnalysis as Record<string, unknown>;
+}
+
+/** A compact panel showing what each party stated during the AI intake interview. */
+function PartyStatementsPanel({ statements }: { statements: PartyStatement[] }) {
+  if (statements.length === 0) return null;
+  return (
+    <section className="panel party-statements-panel">
+      <span className="eyebrow">AI intake · What each party said</span>
+      <div className="party-statements-grid">
+        {statements.map((ps) => (
+          <div key={ps.party} className="party-statement-col">
+            <h4>{ps.party === "rider" ? "Rider" : "Driver"}</h4>
+            {ps.facts.length === 0 ? (
+              <p className="judge-empty">No specific facts stated.</p>
+            ) : (
+              <ul className="party-fact-list">
+                {ps.facts.map((f, i) => (
+                  <li key={i}>
+                    <code>{f.key}</code>
+                    <span>{f.value}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** A warning banner shown when rider and driver gave contradictory accounts. */
+function PartyContradictionBanner({ contradictions }: { contradictions: PartyContradiction[] }) {
+  if (contradictions.length === 0) return null;
+  return (
+    <section className="panel party-contradiction-banner">
+      <div className="panel-heading">
+        <div>
+          <span className="eyebrow">Intake contradiction detected</span>
+          <h3>Parties disagree on {contradictions.length} key {contradictions.length === 1 ? "point" : "points"}</h3>
+        </div>
+      </div>
+      <p className="judge-boundary-note">
+        The AI intake interview detected that the rider and driver gave conflicting accounts on
+        the following points. This has lowered the confidence score and forced the case to human
+        review.
+      </p>
+      <div className="contradiction-list">
+        {contradictions.map((c, i) => (
+          <div className="contradiction-row" key={i}>
+            <code>{c.factKey}</code>
+            <div className="contradiction-claims">
+              <div>
+                <small>Rider said</small>
+                <b>{c.riderClaim}</b>
+              </div>
+              <div>
+                <small>Driver said</small>
+                <b>{c.driverClaim}</b>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Summary of the intake analysis — shown right after the AI interviews complete.
+ *  Surfaces the dispute type, confidence, resolution mode, party statements,
+ *  and contradictions so the operator sees the intake contribution immediately. */
+function IntakeAnalysisSummary({
+  intakeAnalysis,
+  partyStatements,
+  partyContradictions,
+}: {
+  intakeAnalysis: Record<string, unknown> | null;
+  partyStatements: PartyStatement[];
+  partyContradictions: PartyContradiction[];
+}) {
+  if (!intakeAnalysis) return null;
+
+  const confidence = intakeAnalysis.confidence as Record<string, number> | undefined;
+  const resolutionMode = intakeAnalysis.resolutionMode as string | undefined;
+  const disputeType = intakeAnalysis.disputeType as string | undefined;
+  const escalationReasons = (intakeAnalysis.escalationReasons as string[]) ?? [];
+  const overallConfidence = confidence?.overallConfidence;
+  const isHumanReview = resolutionMode === "HUMAN_REVIEW";
+
+  return (
+    <section className={`intake-analysis-summary ${isHumanReview ? "review" : "auto"}`}>
+      <div className="intake-analysis-header">
+        <span className="eyebrow">AI intake analysis</span>
+        <h3>What the intake interviews found</h3>
+      </div>
+
+      <div className="intake-analysis-stats">
+        {disputeType && (
+          <div>
+            <small>Detected dispute</small>
+            <b>{labelize(disputeType)}</b>
+          </div>
+        )}
+        {overallConfidence !== undefined && (
+          <div>
+            <small>Confidence</small>
+            <b>{Math.round(overallConfidence * 100)}%</b>
+          </div>
+        )}
+        {resolutionMode && (
+          <div>
+            <small>Resolution mode</small>
+            <b className={isHumanReview ? "review" : "auto"}>
+              {isHumanReview ? "Human review" : "Auto resolve"}
+            </b>
+          </div>
+        )}
+        {partyStatements.length > 0 && (
+          <div>
+            <small>Party facts extracted</small>
+            <b>{partyStatements.reduce((n, ps) => n + ps.facts.length, 0)}</b>
+          </div>
+        )}
+      </div>
+
+      {escalationReasons.length > 0 && (
+        <p className="review-reason">
+          Escalation: {escalationReasons.map((r) => r.replace(/_/g, " ").toLowerCase()).join(" · ")}
+        </p>
+      )}
+
+      <PartyStatementsPanel statements={partyStatements} />
+      <PartyContradictionBanner contradictions={partyContradictions} />
+    </section>
+  );
+}
 
 export function CaseDetail({
   caseData,
@@ -112,24 +279,66 @@ export function CaseDetail({
   onRunResolution
 }: CaseDetailProps) {
   const [openStep, setOpenStep] = useState(1);
+  const [intakeCase, setIntakeCase] = useState<IntakeCase | null>(null);
+
+  const intakeComplete = !!(
+    intakeCase?.lifecycle === "READY_FOR_ANALYSIS" ||
+    intakeCase?.lifecycle === "AUTO_RESOLVED" ||
+    intakeCase?.lifecycle === "HUMAN_REVIEW"
+  );
+
+  const handleIntakeChange = useCallback((ic: IntakeCase) => {
+    setIntakeCase(ic);
+  }, []);
+
+  // Extract intake analysis data (party statements + contradictions) for display
+  const partyStatements = useMemo(() => extractPartyStatements(intakeCase), [intakeCase]);
+  const partyContradictions = useMemo(() => extractPartyContradictions(intakeCase), [intakeCase]);
+  const intakeAnalysis = useMemo(() => extractIntakeAnalysis(intakeCase), [intakeCase]);
+
+  // When the intake interviews are complete (READY_FOR_ANALYSIS), auto-run the
+  // intake analysis so party statements and contradiction detection are
+  // computed and saved to finalAnalysis.
+  useEffect(() => {
+    if (!intakeCase || intakeCase.lifecycle !== "READY_FOR_ANALYSIS") return;
+    let cancelled = false;
+    void intakeService.analyse(intakeCase.id).then((analysis) => {
+      if (cancelled) return;
+      // The analysis is saved server-side; refresh the intake case to load
+      // finalAnalysis with party statements and contradictions.
+      void intakeService.getCase(intakeCase.id).then((refreshed) => {
+        if (!cancelled) setIntakeCase(refreshed);
+      });
+    }).catch(() => {
+      // Analysis failure is non-fatal — the case workspace still works.
+    });
+    return () => { cancelled = true; };
+  }, [intakeCase?.id, intakeCase?.lifecycle]);
 
   // A new case is a new workflow: start it from the top.
   useEffect(() => {
     setOpenStep(1);
+    setIntakeCase(null);
   }, [caseData.id]);
 
-  // When a run lands, open the first step that has new content. Keyed on the
-  // result object, so this fires once per completed run and never fights an
-  // operator who has since navigated elsewhere.
+  // When a run lands, open the first step that has new content.
   useEffect(() => {
     if (resolutionRun) setOpenStep(FIRST_LIVE_STEP);
   }, [resolutionRun]);
 
+  // When intake completes, auto-advance to step 2 (Review the case)
+  useEffect(() => {
+    if (intakeComplete && openStep === 1) setOpenStep(2);
+  }, [intakeComplete, openStep]);
+
   const hasArguments = resolutionRun !== null || advocateRun !== null;
-  const advocatesOnly = resolutionRun === null && advocateRun !== null;
 
   function stateFor(index: number): StepState {
-    if (index <= 3) return "done";
+    // Step 1: AI intake
+    if (index === 1) return intakeComplete ? "done" : "ready";
+    // Steps 2-4: case review, evidence, facts — always available (static data)
+    if (index <= 4) return "done";
+    // Step 5+: live analysis steps
     if (index === FIRST_LIVE_STEP) return hasArguments ? "done" : "ready";
     return resolutionRun ? "done" : "waiting";
   }
@@ -217,21 +426,44 @@ export function CaseDetail({
           title={STEPS[0].title}
           summary={STEPS[0].summary}
           state={stateFor(1)}
+          stateLabel={intakeComplete ? undefined : "Start here"}
           open={openStep === 1}
           onToggle={() => toggle(1)}
           onNext={() => setOpenStep(2)}
         >
+          <IntakeChatPanel
+            sourceCaseId={caseData.id}
+            onLifecycleChange={handleIntakeChange}
+          />
+          <IntakeAnalysisSummary
+            intakeAnalysis={intakeAnalysis}
+            partyStatements={partyStatements}
+            partyContradictions={partyContradictions}
+          />
+        </WorkflowStep>
+
+        <WorkflowStep
+          index={2}
+          total={TOTAL_STEPS}
+          title={STEPS[1].title}
+          summary={STEPS[1].summary}
+          state={stateFor(2)}
+          open={openStep === 2}
+          onToggle={() => toggle(2)}
+          onPrev={() => setOpenStep(1)}
+          onNext={() => setOpenStep(3)}
+        >
           <section className="two-col">
             <article className="panel">
               <span className="eyebrow">Rider complaint</span>
-              <p>“{caseData.riderComplaint}”</p>
+              <p>"{caseData.riderComplaint}"</p>
               <small>
                 {caseData.rider.name} · {caseData.rider.id}
               </small>
             </article>
             <article className="panel">
               <span className="eyebrow">Driver response</span>
-              <p>“{caseData.driverResponse}”</p>
+              <p>"{caseData.driverResponse}"</p>
               <small>
                 {caseData.driver.name} · {caseData.driver.id}
               </small>
@@ -261,18 +493,20 @@ export function CaseDetail({
               </small>
             </article>
           </section>
+          <PartyStatementsPanel statements={partyStatements} />
+          <PartyContradictionBanner contradictions={partyContradictions} />
         </WorkflowStep>
 
         <WorkflowStep
-          index={2}
+          index={3}
           total={TOTAL_STEPS}
-          title={STEPS[1].title}
-          summary={STEPS[1].summary}
-          state={stateFor(2)}
-          open={openStep === 2}
-          onToggle={() => toggle(2)}
-          onPrev={() => setOpenStep(1)}
-          onNext={() => setOpenStep(3)}
+          title={STEPS[2].title}
+          summary={STEPS[2].summary}
+          state={stateFor(3)}
+          open={openStep === 3}
+          onToggle={() => toggle(3)}
+          onPrev={() => setOpenStep(2)}
+          onNext={() => setOpenStep(4)}
         >
           <section className="panel">
             <div className="panel-heading">
@@ -325,15 +559,15 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={3}
+          index={4}
           total={TOTAL_STEPS}
-          title={STEPS[2].title}
-          summary={STEPS[2].summary}
-          state={stateFor(3)}
-          open={openStep === 3}
-          onToggle={() => toggle(3)}
-          onPrev={() => setOpenStep(2)}
-          onNext={() => setOpenStep(4)}
+          title={STEPS[3].title}
+          summary={STEPS[3].summary}
+          state={stateFor(4)}
+          open={openStep === 4}
+          onToggle={() => toggle(4)}
+          onPrev={() => setOpenStep(3)}
+          onNext={() => setOpenStep(5)}
         >
           {analysis ? (
             <DeterministicAnalysisPanel value={analysis} />
@@ -345,16 +579,16 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={4}
+          index={5}
           total={TOTAL_STEPS}
-          title={STEPS[3].title}
-          summary={STEPS[3].summary}
-          state={stateFor(4)}
-          stateLabel={hasArguments ? undefined : "Start here"}
-          open={openStep === 4}
-          onToggle={() => toggle(4)}
-          onPrev={() => setOpenStep(3)}
-          onNext={() => setOpenStep(5)}
+          title={STEPS[4].title}
+          summary={STEPS[4].summary}
+          state={stateFor(5)}
+          stateLabel={hasArguments ? undefined : "Ready to run"}
+          open={openStep === 5}
+          onToggle={() => toggle(5)}
+          onPrev={() => setOpenStep(4)}
+          onNext={() => setOpenStep(6)}
         >
           {resolutionRun ? (
             <AdvocateArguments
@@ -387,15 +621,15 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={5}
+          index={6}
           total={TOTAL_STEPS}
-          title={STEPS[4].title}
-          summary={STEPS[4].summary}
-          state={stateFor(5)}
-          open={openStep === 5}
-          onToggle={() => toggle(5)}
-          onPrev={() => setOpenStep(4)}
-          onNext={() => setOpenStep(6)}
+          title={STEPS[5].title}
+          summary={STEPS[5].summary}
+          state={stateFor(6)}
+          open={openStep === 6}
+          onToggle={() => toggle(6)}
+          onPrev={() => setOpenStep(5)}
+          onNext={() => setOpenStep(7)}
         >
           {resolutionRun ? (
             <CrossExaminationPanel rebuttals={resolutionRun.rebuttals} />
@@ -408,16 +642,16 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={6}
+          index={7}
           total={TOTAL_STEPS}
-          title={STEPS[5].title}
-          summary={STEPS[5].summary}
-          state={stateFor(6)}
+          title={STEPS[6].title}
+          summary={STEPS[6].summary}
+          state={stateFor(7)}
           stateLabel={resolutionRun ? "Advisory" : undefined}
-          open={openStep === 6}
-          onToggle={() => toggle(6)}
-          onPrev={() => setOpenStep(5)}
-          onNext={() => setOpenStep(7)}
+          open={openStep === 7}
+          onToggle={() => toggle(7)}
+          onPrev={() => setOpenStep(6)}
+          onNext={() => setOpenStep(8)}
         >
           {resolutionRun ? (
             <JudgeAdvisoryPanel judge={resolutionRun.judge} />
@@ -431,28 +665,20 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={7}
+          index={8}
           total={TOTAL_STEPS}
-          title={STEPS[6].title}
-          summary={STEPS[6].summary}
-          state={stateFor(7)}
-          open={openStep === 7}
-          onToggle={() => toggle(7)}
-          onPrev={() => setOpenStep(6)}
-          onNext={() => setOpenStep(8)}
+          title={STEPS[7].title}
+          summary={STEPS[7].summary}
+          state={stateFor(8)}
+          open={openStep === 8}
+          onToggle={() => toggle(8)}
+          onPrev={() => setOpenStep(7)}
+          onNext={() => setOpenStep(9)}
         >
           {resolutionRun ? (
             <>
+              <PartyContradictionBanner contradictions={partyContradictions} />
               <DeterministicOutcomePanel resolution={resolutionRun.deterministicResolution} />
-              {/*
-                Not `caseData.humanReviewSummary`. That field is the server's
-                "Deterministic escalation reasons: A, B, C" string, which is the
-                same list the outcome panel above already renders — and renders
-                in readable words rather than raw enum codes. Showing both was
-                the duplicate this redesign set out to remove. What is genuinely
-                missing for an operator is the consequence, so that is what this
-                states instead.
-              */}
               {resolutionRun.deterministicResolution.resolutionMode === "HUMAN_REVIEW" && (
                 <section className="human-review">
                   <span className="eyebrow">Action required</span>
@@ -473,14 +699,14 @@ export function CaseDetail({
         </WorkflowStep>
 
         <WorkflowStep
-          index={8}
+          index={9}
           total={TOTAL_STEPS}
-          title={STEPS[7].title}
-          summary={STEPS[7].summary}
-          state={stateFor(8)}
-          open={openStep === 8}
-          onToggle={() => toggle(8)}
-          onPrev={() => setOpenStep(7)}
+          title={STEPS[8].title}
+          summary={STEPS[8].summary}
+          state={stateFor(9)}
+          open={openStep === 9}
+          onToggle={() => toggle(9)}
+          onPrev={() => setOpenStep(8)}
           nextLabel="Back to the case"
           onNext={() => setOpenStep(1)}
         >

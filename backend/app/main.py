@@ -1,16 +1,15 @@
+# Load backend/.env BEFORE any app imports — the intake router instantiates
+# ConversationService at module level, which reads GEMINI_API_KEY from the
+# environment. Without this ordering, .env keys are invisible to that service.
+from app.env import load_local_env
+load_local_env()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.config import AgentConfigurationError, AgentSettings
 from app.api.cases import router as case_router
 from app.api.intake import router as intake_router
-from app.env import load_local_env
-
-# Populate the process environment from backend/.env before anything reads it.
-# Safe to do after the imports above: every configuration read in this codebase
-# happens inside a function or a constructor, never at module import time.
-# A real environment variable still wins over the file (override=False).
-load_local_env()
 
 app = FastAPI(title="RydeResolve Case API", version="0.2.0")
 

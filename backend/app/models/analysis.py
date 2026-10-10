@@ -133,6 +133,17 @@ class DeterministicConfidence(AnalysisModel):
     prototype_notice: str = Field(serialization_alias="prototypeNotice")
 
 
+class PartyStatement(AnalysisModel):
+    party: Literal["rider", "driver"]
+    facts: list[dict] = Field(default_factory=list)
+
+
+class PartyContradiction(AnalysisModel):
+    fact_key: str = Field(serialization_alias="factKey")
+    rider_claim: str = Field(serialization_alias="riderClaim")
+    driver_claim: str = Field(serialization_alias="driverClaim")
+
+
 class CaseAnalysisResponse(AnalysisModel):
     case_id: str = Field(serialization_alias="caseId")
     dispute_type: Literal["route_deviation", "no_show_charge"] = Field(serialization_alias="disputeType")
@@ -142,3 +153,9 @@ class CaseAnalysisResponse(AnalysisModel):
     confidence: DeterministicConfidence
     resolution_mode: Literal["AUTO_RESOLVE", "HUMAN_REVIEW"] = Field(serialization_alias="resolutionMode")
     escalation_reasons: list[str] = Field(serialization_alias="escalationReasons")
+    party_statements: list[PartyStatement] = Field(
+        default_factory=list, serialization_alias="partyStatements"
+    )
+    party_contradictions: list[PartyContradiction] = Field(
+        default_factory=list, serialization_alias="partyContradictions"
+    )

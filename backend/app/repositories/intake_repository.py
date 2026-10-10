@@ -125,6 +125,17 @@ class IntakeCaseRepository:
             driverState=driver_state,
         )
 
+    def get_case_by_source(self, source_case_id: str) -> IntakeCase | None:
+        """Return the most recent intake case for a given source case ID, or None."""
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT id FROM intake_cases WHERE source_case_id = ? ORDER BY updated_at DESC LIMIT 1",
+                (source_case_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return self.get_case(row["id"])
+
     def add_message(
         self, *, intake_case_id: str, party: Party, sender: str, content: str
     ) -> IntakeMessage:

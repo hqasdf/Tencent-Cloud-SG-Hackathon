@@ -4,6 +4,7 @@ import json
 import re
 from datetime import datetime, timezone
 
+from app.data.trip_mapping import get_source_case
 from app.llm.hunyuan_client import (
     HunyuanChatMessage,
     HunyuanClient,
@@ -15,6 +16,7 @@ from app.models.intake import (
     HunyuanStructuredReply,
     IntakeCase,
     IntakeMessage,
+    InterviewState,
     Party,
     PartyFact,
 )
@@ -35,12 +37,16 @@ Your role is to:
 3. Use "unknown" for any fact the party has not mentioned — never infer or guess.
 4. NEVER claim you checked GPS, fare, company policy, chat logs, or the other party's private account. You only know what this party tells you.
 5. NEVER promise a refund or make a final ruling.
-6. Return STRICT JSON matching the schema below.
+6. Use the TRIP CONTEXT below to ask smarter, more specific follow-up questions. For example, if the trip context shows a fare difference, you can ask the rider about the fare they expected vs. were charged. But you must NOT reveal system evidence to the party or claim you verified it yourself.
+7. Return STRICT JSON matching the schema below.
 
 PARTY CONTEXT:
 - Current party: {party}
 - Trip ID: {trip_id}
 - Dispute topic: {dispute_topic}
+
+TRIP CONTEXT (system-side data, preloaded for your awareness — do NOT share these details with the party or claim you verified them):
+{trip_context}
 
 You must return a JSON object with EXACTLY these fields:
 {{
@@ -70,6 +76,83 @@ _OPENING_QUESTIONS = {
     "rider": "Hello, I'm here to understand your side of this dispute. Can you describe what happened during your trip?",
     "driver": "Hello, I'm here to understand your side of this dispute. Can you describe what happened during this trip from your perspective?",
 }
+
+
+def _summarise_party_claims(state: InterviewState | None, party_label: str) -> str:
+    """Build a short text summary of one party's extracted facts for the other party's context."""
+    if state is None or not state.facts:
+        return f"The {party_label} has not yet provided any specific claims."
+
+    lines = [f"The {party_label} has stated the following:"]
+    for f in state.facts:
+        lines.append(f"  - {f.key}: {f.value}")
+    return "\n".join(lines)
+
+
+_DRIVER_CONTEXT_PROMPT = """\
+
+ADDITIONAL CONTEXT — RIDER'S CLAIMS:
+{rider_claims}
+
+The rider has completed their intake interview. The claims above are what the rider stated.
+Your job is to interview the DRIVER about these same events. Ask the driver about the
+specific points the rider raised — did the route deviate, was the fare different, etc.
+Do NOT tell the driver "the rider said X" verbatim — instead ask about the same topics
+from the driver's perspective."""
+
+
+_RIDER_REBUTTAL_PROMPT = """\
+
+ADDITIONAL CONTEXT — DRIVER'S CLAIMS:
+{driver_claims}
+
+The driver has now completed their interview. The claims above are what the driver stated.
+The rider is being given a chance to respond to any conflicting points. Ask the rider if
+they have anything to add or clarify in response to the driver's account."""
+
+
+def _build_trip_context(trip_id: str) -> str:
+    """Build a compact text summary of the source case trip data for the system prompt.
+
+    This preloads the AI with factual trip context (route, fare, evidence, timeline)
+    so it can ask smarter, more targeted follow-up questions — without revealing
+    system evidence to the party or claiming it verified anything.
+    """
+    source = get_source_case(trip_id)
+    if source is None:
+        return "(no trip data available)"
+
+    lines: list[str] = []
+
+    # Trip basics
+    trip = source.trip
+    lines.append(
+        f"Trip: {trip.trip_id} | {trip.pickup} → {trip.destination} | "
+        f"Booked: {trip.booked_at} | Distance: {trip.distance} | Duration: {trip.duration}"
+    )
+
+    # Fare
+    fare = source.fare
+    lines.append(
+        f"Fare: quoted {fare.currency} {fare.quoted:.2f}, charged {fare.currency} {fare.actual:.2f}, "
+        f"difference {fare.currency} {fare.difference:.2f}"
+    )
+
+    # Driver & rider
+    lines.append(f"Rider: {source.rider.name} ({source.rider.id})")
+    lines.append(f"Driver: {source.driver.name} ({source.driver.id})")
+
+    # Evidence summaries (compact — just type + summary, not full content)
+    if source.evidence:
+        ev_lines = [f"  - [{e.type}] {e.summary} (status: {e.status})" for e in source.evidence]
+        lines.append("Evidence:\n" + "\n".join(ev_lines))
+
+    # Timeline (compact)
+    if source.timeline:
+        tl_lines = [f"  - [{t.timestamp}] {t.description}" for t in source.timeline]
+        lines.append("Timeline:\n" + "\n".join(tl_lines))
+
+    return "\n".join(lines)
 
 
 def _utc_now() -> str:
@@ -176,7 +259,20 @@ class ConversationService:
             party=party,
             trip_id=case.trip_id,
             dispute_topic=dispute_topic,
+            trip_context=_build_trip_context(case.trip_id),
         )
+
+        # When interviewing the driver after rider completion, append rider's claims
+        if party == "driver" and case.rider_state and case.rider_state.interview_complete:
+            system_prompt += _DRIVER_CONTEXT_PROMPT.format(
+                rider_claims=_summarise_party_claims(case.rider_state, "rider"),
+            )
+
+        # When rider is in rebuttal phase, append driver's claims
+        if party == "rider" and case.lifecycle == "RIDER_REBUTTAL":
+            system_prompt += _RIDER_REBUTTAL_PROMPT.format(
+                driver_claims=_summarise_party_claims(case.driver_state, "driver"),
+            )
 
         # Build chat messages
         chat_messages: list[HunyuanChatMessage] = [
@@ -259,12 +355,93 @@ class ConversationService:
         # Update case lifecycle
         self._update_lifecycle(intake_case_id)
 
+        # If the rider just completed, auto-start the driver interview
+        refreshed = self._repository.get_case(intake_case_id)
+        assert refreshed is not None
+
+        if (
+            party == "rider"
+            and refreshed.lifecycle == "DRIVER_INTERVIEW"
+            and refreshed.driver_state is not None
+            and not refreshed.driver_state.interview_complete
+        ):
+            self._auto_start_driver_interview(intake_case_id, refreshed.rider_state)
+
         refreshed = self._repository.get_case(intake_case_id)
         assert refreshed is not None
         return refreshed, assistant_msg
 
+    def _auto_start_driver_interview(
+        self, intake_case_id: str, rider_state: InterviewState | None
+    ) -> None:
+        """Post the opening message to the driver, referencing the rider's claims.
+
+        Also posts an alert message to the rider telling them the driver is being
+        contacted and they'll get a chance to respond after.
+        """
+        rider_summary = _summarise_party_claims(rider_state, "rider")
+
+        # Alert the rider
+        self._repository.add_message(
+            intake_case_id=intake_case_id,
+            party="rider",
+            sender="assistant",
+            content=(
+                "Thank you for your account. We're now contacting the driver to hear "
+                "their side of the story. Once the driver responds, you'll have a "
+                "chance to clarify or respond to anything they say."
+            ),
+        )
+
+        # Opening message for driver that references rider's claims
+        if rider_state and rider_state.facts:
+            driver_opening = (
+                "Hello, I'm here to understand your side of this dispute. "
+                f"The rider has raised the following concerns:\n{rider_summary}\n\n"
+                "Could you share your perspective on what happened during this trip?"
+            )
+        else:
+            driver_opening = _OPENING_QUESTIONS["driver"]
+
+        self._repository.add_message(
+            intake_case_id=intake_case_id,
+            party="driver",
+            sender="assistant",
+            content=driver_opening,
+        )
+
+    def skip_rebuttal(self, intake_case_id: str) -> IntakeCase:
+        """Allow the rider to skip the rebuttal phase and proceed to analysis."""
+        case = self._repository.get_case(intake_case_id)
+        if case is None:
+            raise LookupError(f"Intake case {intake_case_id} not found")
+        if case.lifecycle != "RIDER_REBUTTAL":
+            raise ValueError(
+                f"Cannot skip rebuttal — case is in {case.lifecycle} phase, "
+                "not RIDER_REBUTTAL."
+            )
+
+        self._repository.add_message(
+            intake_case_id=intake_case_id,
+            party="rider",
+            sender="assistant",
+            content="No problem — we'll proceed with the information we have so far.",
+        )
+        self._repository.update_lifecycle(
+            intake_case_id=intake_case_id,
+            lifecycle="READY_FOR_ANALYSIS",
+        )
+        refreshed = self._repository.get_case(intake_case_id)
+        assert refreshed is not None
+        return refreshed
+
     def _update_lifecycle(self, intake_case_id: str) -> None:
-        """Update the case lifecycle based on interview completion states."""
+        """Update the case lifecycle based on interview completion states.
+
+        Flow:
+        RIDER_INTERVIEW -> rider done -> DRIVER_INTERVIEW -> driver done ->
+        RIDER_REBUTTAL -> rider sends rebuttal -> READY_FOR_ANALYSIS
+        """
         case = self._repository.get_case(intake_case_id)
         if case is None:
             return
@@ -281,11 +458,20 @@ class ConversationService:
                 detected = case.driver_state.suggested_dispute_type
 
         if rider_done and driver_done:
-            self._repository.update_lifecycle(
-                intake_case_id=intake_case_id,
-                lifecycle="READY_FOR_ANALYSIS",
-                detected_dispute_type=detected,
-            )
+            if case.lifecycle == "RIDER_REBUTTAL":
+                # Rider has already sent their rebuttal — ready for analysis
+                self._repository.update_lifecycle(
+                    intake_case_id=intake_case_id,
+                    lifecycle="READY_FOR_ANALYSIS",
+                    detected_dispute_type=detected,
+                )
+            else:
+                # Driver just finished — move to rider rebuttal phase
+                self._repository.update_lifecycle(
+                    intake_case_id=intake_case_id,
+                    lifecycle="RIDER_REBUTTAL",
+                    detected_dispute_type=detected,
+                )
         elif rider_done:
             self._repository.update_lifecycle(
                 intake_case_id=intake_case_id,

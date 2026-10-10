@@ -58,23 +58,47 @@ In practice this means:
 
 ## Quick start
 
-```bash
-# backend
-cd backend
-..\..\.workbuddy-ai\binaries\python\envs\default\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+### First-time setup
 
-# frontend (in a second terminal)
-cd frontend
+```bash
+# 1. Get a free Gemini API key at https://aistudio.google.com/app/apikey
+
+# 2. Create backend/.env with your key (gitignored, never committed)
+cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\backend"
+echo GEMINI_API_KEY=your_key_here > .env
+
+# 3. Install dependencies
+pip install -r requirements.txt
+cd ..\frontend
+npm install
+```
+
+### Run the backend (Terminal 1)
+
+```bash
+cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\backend"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+### Run the frontend (Terminal 2)
+
+```bash
+cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\frontend"
 npm run dev
 ```
 
-Then open the frontend URL and select a case. See [`RUNNING.md`](./RUNNING.md) for
-first-time setup, the `--reload` variant, and troubleshooting.
+### Open the app
+
+Go to `http://localhost:5173`
+
+The Gemini API key is read from `backend/.env` (local dev) or the
+`GEMINI_API_KEY` environment variable (production). See
+[`RUNNING.md`](./RUNNING.md) for troubleshooting and deployment notes.
 
 ## Tests
 
 ```bash
-cd backend && python -m pytest      # active application
-npm test                            # LEGACY Node pipeline only
-cd frontend && npm run build        # type-check + production build
+cd backend && python -m pytest       # active application
+npm test                             # LEGACY Node pipeline only
+cd frontend && npm run build         # type-check + production build
 ```

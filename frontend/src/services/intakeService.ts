@@ -47,6 +47,14 @@ export const intakeService = {
   getCase(id: string): Promise<IntakeCase> {
     return request<IntakeCase>(`/api/intake/cases/${encodeURIComponent(id)}`);
   },
+  getBySource(sourceCaseId: string): Promise<IntakeCase> {
+    return request<IntakeCase>(`/api/intake/by-source/${encodeURIComponent(sourceCaseId)}`);
+  },
+  createBySource(sourceCaseId: string): Promise<IntakeCase> {
+    return request<IntakeCase>(`/api/intake/by-source/${encodeURIComponent(sourceCaseId)}`, {
+      method: "POST",
+    });
+  },
   sendMessage(id: string, body: SendMessageRequest): Promise<SendMessageResponse> {
     return request<SendMessageResponse>(`/api/intake/cases/${encodeURIComponent(id)}/messages`, {
       method: "POST",
@@ -55,6 +63,11 @@ export const intakeService = {
   },
   analyse(id: string): Promise<CaseAnalysis> {
     return request<CaseAnalysis>(`/api/intake/cases/${encodeURIComponent(id)}/analyse`, {
+      method: "POST",
+    });
+  },
+  skipRebuttal(id: string): Promise<IntakeCase> {
+    return request<IntakeCase>(`/api/intake/cases/${encodeURIComponent(id)}/skip-rebuttal`, {
       method: "POST",
     });
   },

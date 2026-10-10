@@ -34,4 +34,9 @@ export interface DeterministicPolicyEvaluation { policyId: string; policyVersion
 export interface ResolutionCalculation { fareDifference: number; explainedFareImpact: number; unexplainedFareImpact: number; ratioApplied: number; }
 export interface ResolutionRecommendation { ruling: string; recommendedAction: string; refundAmount: number; currency: string; calculation: ResolutionCalculation; explanation: string; counterfactualExplanation: string; }
 export interface DeterministicConfidence { evidenceCompleteness: number; policyClarity: number; factualConsistency: number; invalidEvidencePenalty: number; contradictionPenalty: number; missingDataPenalty: number; overallConfidence: number; prototypeNotice: string; }
-export interface CaseAnalysis { caseId: string; disputeType: DisputeType; analysis: DeterministicAnalysis; policyEvaluation: DeterministicPolicyEvaluation; resolutionRecommendation: ResolutionRecommendation; confidence: DeterministicConfidence; resolutionMode: ResolutionMode; escalationReasons: string[]; }
+
+export interface PartyFactEntry { key: string; value: string; statedBy: string; }
+export interface PartyStatement { party: string; facts: PartyFactEntry[]; }
+export interface PartyContradiction { factKey: string; riderClaim: string; driverClaim: string; }
+
+export interface CaseAnalysis { caseId: string; disputeType: DisputeType; analysis: DeterministicAnalysis; policyEvaluation: DeterministicPolicyEvaluation; resolutionRecommendation: ResolutionRecommendation; confidence: DeterministicConfidence; resolutionMode: ResolutionMode; escalationReasons: string[]; partyStatements?: PartyStatement[]; partyContradictions?: PartyContradiction[]; }

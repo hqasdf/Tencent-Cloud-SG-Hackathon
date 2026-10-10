@@ -7,6 +7,7 @@ import { DeterministicAnalysisPanel } from "./DeterministicAnalysis";
 const LIFECYCLE_LABELS: Record<string, string> = {
   RIDER_INTERVIEW: "Rider interview",
   DRIVER_INTERVIEW: "Driver interview",
+  RIDER_REBUTTAL: "Rider rebuttal",
   READY_FOR_ANALYSIS: "Ready for analysis",
   ANALYSING: "Analysing…",
   AUTO_RESOLVED: "Auto resolved",
@@ -172,8 +173,23 @@ export function IntakeWorkspace() {
     }
   }, [intakeCase]);
 
+  const handleSkipRebuttal = useCallback(async () => {
+    if (!intakeCase) return;
+    setAnalysing(true);
+    setError(null);
+    try {
+      const refreshed = await intakeService.skipRebuttal(intakeCase.id);
+      setIntakeCase(refreshed);
+    } catch (e) {
+      setError(e instanceof IntakeApiError ? e.message : "Failed to skip rebuttal.");
+    } finally {
+      setAnalysing(false);
+    }
+  }, [intakeCase]);
+
   const bothComplete = !!(intakeCase?.riderState?.interviewComplete && intakeCase?.driverState?.interviewComplete);
-  const canAnalyse = bothComplete && intakeCase?.lifecycle !== "ANALYSING";
+  const canAnalyse = bothComplete && intakeCase?.lifecycle === "READY_FOR_ANALYSIS" && !analysing;
+  const inRebuttal = intakeCase?.lifecycle === "RIDER_REBUTTAL";
 
   return (
     <main className="content intake-content">
@@ -209,6 +225,19 @@ export function IntakeWorkspace() {
       </section>
 
       {error && <div className="app-state intake-error"><p>{error}</p></div>}
+
+      {inRebuttal && (
+        <div className="app-state intake-alert">
+          <div className="alert-icon">🔔</div>
+          <div>
+            <h3>The driver has responded</h3>
+            <p>The driver has completed their interview. You can now send a message to clarify or respond to their account, or skip to proceed with analysis.</p>
+            <button className="intake-skip-btn" onClick={handleSkipRebuttal} disabled={analysing}>
+              Skip rebuttal &amp; proceed to analysis
+            </button>
+          </div>
+        </div>
+      )}
 
       <section className="phone-grid">
         <div className="phone-column">

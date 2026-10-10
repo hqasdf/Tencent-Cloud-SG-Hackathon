@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 
-from app.data.trip_mapping import KNOWN_TRIP_IDS, get_source_case_id
+from app.data.trip_mapping import KNOWN_TRIP_IDS, get_source_case, get_source_case_by_case_id, get_source_case_id
 from app.llm.hunyuan_client import HunyuanUnavailableError
 from app.models.analysis import CaseAnalysisResponse
 from app.models.intake import (
@@ -80,6 +80,62 @@ def get_intake_case(intake_case_id: str) -> IntakeCase:
             detail=f"Intake case {intake_case_id} not found",
         )
     return case
+
+
+@router.get("/by-source/{source_case_id}", response_model=IntakeCase)
+def get_intake_by_source(source_case_id: str) -> IntakeCase:
+    """Return the most recent intake case for a source dispute case ID.
+
+    Returns 404 if no intake case has been started for this source case.
+    """
+    case = _repository.get_case_by_source(source_case_id)
+    if case is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No intake case found for source case {source_case_id}",
+        )
+    return case
+
+
+@router.post("/by-source/{source_case_id}", response_model=IntakeCase, status_code=status.HTTP_201_CREATED)
+def create_intake_by_source(source_case_id: str) -> IntakeCase:
+    """Create (or return existing) intake case for a source dispute case ID.
+
+    This is used by the case workspace to start AI intake interviews directly
+    from a dispute case, without needing a trip ID.
+    """
+    # Look up the trip ID from the source case
+    source = get_source_case_by_case_id(source_case_id)
+    if source is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source case {source_case_id} not found",
+        )
+
+    # Return existing intake case if one already exists
+    existing = _repository.get_case_by_source(source_case_id)
+    if existing is not None:
+        return existing
+
+    trip_id = source.trip.trip_id
+    return _repository.create_case(source_case_id=source_case_id, trip_id=trip_id)
+
+
+@router.post("/cases/{intake_case_id}/skip-rebuttal", response_model=IntakeCase)
+def skip_rebuttal(intake_case_id: str) -> IntakeCase:
+    """Allow the rider to skip the rebuttal phase and proceed to analysis."""
+    try:
+        return _conversation_service.skip_rebuttal(intake_case_id)
+    except LookupError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
 
 
 @router.post("/cases/{intake_case_id}/analyse", response_model=CaseAnalysisResponse)

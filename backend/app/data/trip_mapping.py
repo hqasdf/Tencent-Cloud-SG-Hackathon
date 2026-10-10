@@ -25,3 +25,11 @@ def get_source_case(trip_id: str) -> DisputeCase | None:
         if case.id == case_id:
             return case
     return None
+
+
+def get_source_case_by_case_id(case_id: str) -> DisputeCase | None:
+    """Return the full source DisputeCase for a given case ID, or None if unknown."""
+    for case in MOCK_CASES:
+        if case.id == case_id:
+            return case
+    return None
