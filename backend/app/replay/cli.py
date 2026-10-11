@@ -105,6 +105,8 @@ def _build_parser() -> argparse.ArgumentParser:
     demo = sub.add_parser("mock-demo", help="Prepare and reverify an explicitly MOCK demo. No network.")
     demo.add_argument("--case", required=True)
     demo.add_argument("--output", required=True, help="A fresh local artifact directory; existing artifacts are preserved.")
+    demo.add_argument("--initialize-empty-intake", action="store_true",
+        help="Initialize only an empty synthetic intake in an explicitly configured database. No interview calls.")
     demo.set_defaults(handler=_cmd_mock_demo)
 
     return parser
@@ -289,6 +291,44 @@ def _cmd_mock_demo(args: argparse.Namespace) -> int:
     if root.exists():
         print("Choose a fresh output directory; existing artifacts will not be overwritten.")
         return 2
+    if args.initialize_empty_intake:
+        import os
+        from app.repositories.intake_repository import IntakeCaseRepository
+        from app.repositories.case_repository import MockCaseRepository
+        from app.services.case_service import CaseService
+        configured = os.getenv("INTAKE_DB_PATH", "")
+        if not configured or not Path(configured).is_absolute():
+            print("Demo initialization requires an explicitly configured absolute INTAKE_DB_PATH.")
+            return 2
+        database = Path(configured)
+        if database.exists():
+            # Inspect first, read-only: never add demo tables to an unrelated DB
+            # or expose populated interviews from another case in a shared demo.
+            import sqlite3
+            from contextlib import closing
+            try:
+                with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)) as connection:
+                    populated = connection.execute("SELECT COUNT(*) FROM intake_messages").fetchone()[0]
+                    populated = populated or any(json.loads(facts) or complete for facts, complete in
+                        connection.execute("SELECT facts, interview_complete FROM interview_states"))
+                    populated = populated or any(lifecycle != "RIDER_INTERVIEW" for lifecycle, in
+                        connection.execute("SELECT lifecycle FROM intake_cases"))
+                if populated:
+                    print("Refusing demo initialization in a populated database. Existing data is preserved.")
+                    return 2
+            except (sqlite3.Error, ValueError, TypeError):
+                print("Refusing demo initialization in an unrecognized database. Existing data is preserved.")
+                return 2
+        repository = IntakeCaseRepository(configured)
+        source = CaseService(MockCaseRepository())._load_case(args.case)
+        existing = repository.get_case_by_source(source.id)
+        if existing and (existing.messages or existing.lifecycle != "RIDER_INTERVIEW"
+                or any(state and (state.facts or state.interview_complete)
+                       for state in (existing.rider_state, existing.driver_state))):
+            print("Refusing demo initialization over populated intake. Existing data is preserved.")
+            return 2
+        if existing is None:
+            repository.create_case(source_case_id=source.id, trip_id=source.trip.trip_id)
     case, analysis, _ = _load_case(args.case)
     settings = AgentSettings(mode="mock", provider="mock", max_tokens=4096)
     service = ReplayService(store=ReplayArtifactStore(root=root), settings=settings)
@@ -324,7 +364,7 @@ def _load_case(case_id: str):
     """
     from app.repositories.case_repository import MockCaseRepository
     from app.services.case_service import CaseService, CaseNotFoundError
-    from app.repositories.intake_repository import DB_PATH, IntakeCaseRepository
+    from app.repositories.intake_repository import intake_db_path, IntakeCaseRepository
 
     class ReadOnlyIntakeRepository(IntakeCaseRepository):
         def _init_schema(self):
@@ -336,8 +376,9 @@ def _load_case(case_id: str):
             conn.row_factory = sqlite3.Row
             return conn
 
+    database = intake_db_path()
     service = CaseService(MockCaseRepository(), intake_repository=(
-        ReadOnlyIntakeRepository(DB_PATH) if DB_PATH.is_file() else None))
+        ReadOnlyIntakeRepository(database) if database.is_file() else None))
     try:
         case = service._load_case(case_id)
     except CaseNotFoundError:

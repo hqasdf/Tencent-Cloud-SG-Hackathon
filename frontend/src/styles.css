@@ -2292,3 +2292,22 @@ code {
   .case-header-side { align-items: flex-start; }
 }
 
+
+/* Four-section case review: keep detailed records available without crowding summaries. */
+.view-details, .more-actions, .intake-transcript { margin: 12px 0; }
+summary { cursor: pointer; font-weight: 650; color: var(--rvde-navy); padding: 9px 0; }
+summary:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid #6d4bc4; outline-offset: 3px; }
+.view-details[open] { border-top: 1px solid var(--rvde-border); padding-top: 6px; }
+.ai-review-timeline { list-style: none; padding: 0; display: grid; gap: 12px; }
+.ai-review-timeline > li { border: 1px solid var(--rvde-border); border-left: 4px solid var(--rvde-navy); border-radius: 12px; padding: 16px; background: #fff; }
+.ai-review-timeline h3 { margin: 0; font-size: 15px; }
+.ai-review-timeline p { margin: 8px 0; line-height: 1.5; }
+.ai-review-timeline small { color: var(--rvde-text-soft); }
+.compact-evidence { list-style: none; padding: 0; }
+.compact-evidence li { padding: 12px 0; border-bottom: 1px solid var(--rvde-border); display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.compact-evidence li > span { display: grid; gap: 4px; }
+.compact-evidence details { grid-column: 1 / -1; }
+.more-actions button { display: block; margin: 6px 0; }
+.workflow-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 700px) { .workflow-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ai-review-timeline .panel-heading { flex-wrap: wrap; gap: 8px; } .compact-evidence li { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

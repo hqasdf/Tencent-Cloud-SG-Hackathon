@@ -25,6 +25,18 @@ export interface AdvocateClaim {
   importance: ClaimImportance;
   assertedFacts: AssertedFact[];
   disputedEvidenceIds: string[];
+  propositions?: PropositionVerification[];
+}
+
+export interface PropositionVerification {
+  propositionId: string;
+  kind: "FACT" | "CAUSAL" | "POLICY_APPLICATION" | "ADVOCACY_POSITION";
+  status: "VERIFIED" | "REJECTED" | "ARGUMENT_ONLY";
+  reason: string | null;
+  detail: string;
+  trustedSummary: string | null;
+  evidenceIds: string[];
+  policyRuleIds: string[];
 }
 
 /** A claim the deterministic verifier refused. Kept visible for audit. */
@@ -35,6 +47,7 @@ export interface RejectedClaim {
   detail: string;
   evidenceIds: string[];
   policyRefs: string[];
+  propositions?: PropositionVerification[];
 }
 
 export interface ClaimWarning {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -18,6 +19,10 @@ from app.models.intake import (
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "intake.db"
 
 
+def intake_db_path() -> Path:
+    return Path(os.getenv("INTAKE_DB_PATH") or DB_PATH)
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -30,7 +35,7 @@ class IntakeCaseRepository:
     """Owns SQLite records for intake cases, messages, and interview states."""
 
     def __init__(self, db_path: Path | str | None = None) -> None:
-        self._db_path = Path(db_path) if db_path else DB_PATH
+        self._db_path = Path(db_path) if db_path else intake_db_path()
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 

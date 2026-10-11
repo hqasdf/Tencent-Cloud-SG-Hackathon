@@ -149,8 +149,8 @@ export function DeterministicOutcomePanel({ resolution }: { resolution: Determin
     <article className="panel judge-panel deterministic">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">Deterministic execution · CODE</span>
-          <h3>Authoritative outcome</h3>
+          <span className="eyebrow">Calculated by code</span>
+          <h3>Final decision</h3>
         </div>
         <span className={`resolution-mode ${resolution.resolutionMode.toLowerCase()}`}>
           {humanize(resolution.resolutionMode)}
@@ -158,15 +158,13 @@ export function DeterministicOutcomePanel({ resolution }: { resolution: Determin
       </div>
 
       <p className="judge-boundary-note">
-        Computed by the resolution, confidence and escalation engines without reference to the
-        Judge. The recommendation in the previous step cannot move any value here — this is what
-        actually happens.
+        Code sets this outcome. AI recommendations cannot change it.
       </p>
 
       <div className="decision-stats">
         <span>
           <small>Final action</small>
-          <b>{labelize(resolution.recommendedAction)}</b>
+          <b>{humanize(resolution.recommendedAction)}</b>
         </span>
         <span>
           <small>Refund amount</small>

@@ -12,8 +12,11 @@ The deterministic engine (Milestone 3) is the single source of truth for distanc
 durations, pickup checks, waiting duration, fares, refunds, policy thresholds,
 evidence validity, confidence, and escalation. The advocates argue from that
 evidence and never recompute anything. A separate deterministic verifier then checks
-every claim an advocate makes before it can be used. The Judge is intentionally not
-implemented in this milestone.
+every claim an advocate makes before it can be used. The full pipeline includes
+both Rebuttals and an advisory Judge whose validated output cannot override code.
+
+Production configuration, Docker files and persistent-volume deployment are
+documented in [Phase 5A deployment preparation](../docs/phase5a-deployment.md).
 
 ## Local development
 

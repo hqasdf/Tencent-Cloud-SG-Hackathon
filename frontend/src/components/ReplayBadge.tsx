@@ -42,7 +42,7 @@ export function ReplayBadge({ metadata }: { metadata: ReplayMetadata }) {
       title={detail}
       aria-label={`Replayed AI output. ${detail}`}
     >
-      {label}{stages.length ? ` · ${stages.join(" + ")}` : ""}
+      {label}
     </span>
   );
 }

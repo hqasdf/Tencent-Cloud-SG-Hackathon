@@ -1,0 +1,50 @@
+name: ryderesolve
+services:
+  api:
+    image: ryderesolve-api:${RELEASE_TAG:?Set RELEASE_TAG}
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file:
+      - backend.env
+    environment:
+      APP_ENV: production
+      INTAKE_DB_PATH: /data/intake/intake.db
+      AGENT_CHECKPOINT_DIR: /data/checkpoints
+    volumes:
+      - app_data:/data
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    # Intentionally no host port for the backend.
+  web:
+    image: ryderesolve-web:${RELEASE_TAG:?Set RELEASE_TAG}
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN to the public DNS hostname}
+      DEMO_USER: ${DEMO_USER:?Set DEMO_USER}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:?Set a hashed demo password}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  app_data:
+    name: ryderesolve_app_data
+  caddy_data:
+    name: ryderesolve_caddy_data
+  caddy_config:
+    name: ryderesolve_caddy_config

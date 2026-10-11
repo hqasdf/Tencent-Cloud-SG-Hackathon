@@ -71,3 +71,8 @@ application_default_credentials.json
 *.bak
 *.db-wal
 *.db-shm
+
+# Deployment runtime configuration and persistent private storage.
+/deploy/backend.env
+/deploy/compose.env
+/deploy/data/

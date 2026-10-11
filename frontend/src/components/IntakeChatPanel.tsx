@@ -5,11 +5,11 @@ import { IntakeApiError, intakeService } from "../services/intakeService";
 const LIFECYCLE_LABELS: Record<string, string> = {
   RIDER_INTERVIEW: "Rider interview",
   DRIVER_INTERVIEW: "Driver interview",
-  RIDER_REBUTTAL: "Rider rebuttal",
+  RIDER_REBUTTAL: "Rider clarification",
   READY_FOR_ANALYSIS: "Ready for analysis",
   ANALYSING: "Analysing…",
-  AUTO_RESOLVED: "Auto resolved",
-  HUMAN_REVIEW: "Human review",
+  AUTO_RESOLVED: "Accounts reviewed",
+  HUMAN_REVIEW: "Needs human review",
 };
 
 function ChatBubble({ msg }: { msg: IntakeMessage }) {
@@ -26,7 +26,7 @@ function ChatBubble({ msg }: { msg: IntakeMessage }) {
 interface PhoneProps {
   party: Party;
   intakeCase: IntakeCase;
-  onSend: (content: string) => void;
+  onSend: (content: string) => Promise<boolean>;
   loading: boolean;
   disabled: boolean;
 }
@@ -41,11 +41,10 @@ function PhoneMockup({ party, intakeCase, onSend, loading, disabled }: PhoneProp
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  const submit = () => {
+  const submit = async () => {
     const text = input.trim();
     if (!text || loading || disabled) return;
-    onSend(text);
-    setInput("");
+    if (await onSend(text)) setInput("");
   };
 
   const label = party === "rider" ? "Rider" : "Driver";
@@ -71,6 +70,7 @@ function PhoneMockup({ party, intakeCase, onSend, loading, disabled }: PhoneProp
         </div>
         <footer className="phone-input-bar">
           <input
+            aria-label={`${label} statement`}
             type="text"
             value={input}
             placeholder={`Message as ${label.toLowerCase()}…`}
@@ -102,6 +102,7 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
   const [loadingCase, setLoadingCase] = useState(true);
   const [sending, setSending] = useState<"rider" | "driver" | null>(null);
   const [skipping, setSkipping] = useState(false);
+  const requestActive = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load or create intake case when the source case changes
@@ -134,13 +135,15 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
   }, [loadOrCreate]);
 
   const handleSend = useCallback(async (party: Party, content: string) => {
-    if (!intakeCase) return;
+    if (!intakeCase || requestActive.current) return false;
+    requestActive.current = true;
     setSending(party);
     setError(null);
     try {
       const resp = await intakeService.sendMessage(intakeCase.id, { party, content });
       setIntakeCase(resp.case);
       onLifecycleChange?.(resp.case);
+      return true;
     } catch (e) {
       if (e instanceof IntakeApiError && e.status === 503) {
         try {
@@ -150,13 +153,16 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
         } catch { /* ignore */ }
       }
       setError(e instanceof Error ? e.message : "Failed to send message.");
+      return false;
     } finally {
       setSending(null);
+      requestActive.current = false;
     }
   }, [intakeCase, onLifecycleChange]);
 
   const handleSkipRebuttal = useCallback(async () => {
-    if (!intakeCase) return;
+    if (!intakeCase || requestActive.current) return;
+    requestActive.current = true;
     setSkipping(true);
     setError(null);
     try {
@@ -167,6 +173,7 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
       setError(e instanceof Error ? e.message : "Failed to skip rebuttal.");
     } finally {
       setSkipping(false);
+      requestActive.current = false;
     }
   }, [intakeCase, onLifecycleChange]);
 
@@ -207,14 +214,15 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
           <div className="alert-icon">🔔</div>
           <div>
             <h3>The driver has responded</h3>
-            <p>The driver has completed their interview. The rider can now send a message to clarify or respond, or skip to proceed.</p>
-            <button className="intake-skip-btn" onClick={handleSkipRebuttal} disabled={skipping}>
-              {skipping ? "Skipping…" : "Skip rebuttal"}
+            <p>Add a rider clarification, or continue without one.</p>
+            <button className="intake-skip-btn" onClick={handleSkipRebuttal} disabled={skipping || sending !== null}>
+              {skipping ? "Skipping…" : "Skip clarification"}
             </button>
           </div>
         </div>
       )}
 
+      <details className="intake-transcript" open={!intakeDone}><summary>{intakeDone ? "Saved interviews" : "Continue interview"}</summary>
       <section className="phone-grid">
         <div className="phone-column">
           <PhoneMockup
@@ -222,7 +230,7 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
             intakeCase={intakeCase}
             onSend={(c) => handleSend("rider", c)}
             loading={sending === "rider"}
-            disabled={sending !== null}
+            disabled={sending !== null || skipping}
           />
         </div>
         <div className="phone-column">
@@ -231,10 +239,11 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
             intakeCase={intakeCase}
             onSend={(c) => handleSend("driver", c)}
             loading={sending === "driver"}
-            disabled={sending !== null}
+            disabled={sending !== null || skipping}
           />
         </div>
       </section>
+      </details>
     </div>
   );
 }

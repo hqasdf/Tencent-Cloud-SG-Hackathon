@@ -1,0 +1,31 @@
+# Allowlist the active application's build inputs. Git history, private data,
+# local configuration, diagnostics and legacy implementations are not sent.
+**
+!backend/
+!backend/app/
+!backend/app/**
+!backend/requirements.lock
+!backend/Dockerfile
+!frontend/
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/index.html
+!frontend/tsconfig.json
+!frontend/vite.config.ts
+!frontend/src/
+!frontend/src/**
+!frontend/public/
+!frontend/public/**
+!frontend/Dockerfile
+!deploy/
+!deploy/Caddyfile
+**/__pycache__/**
+**/*.pyc
+**/.env*
+**/*.db
+**/*.sqlite3
+**/*.log
+**/credentials*.json
+**/service-account*.json
+**/*.pem
+**/*.key

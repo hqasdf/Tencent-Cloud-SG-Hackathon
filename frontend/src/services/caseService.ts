@@ -8,8 +8,10 @@ import type {
   RebuttalRunResult
 } from "../types/rebuttal";
 import type { WorkflowState } from "../types/workflow";
+import { resolveApiBaseUrl } from "../utils/apiConfig";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD,
+  import.meta.env.PROD ? "" : "http://localhost:8000");
 
 export class CaseApiError extends Error {
   constructor(message: string, public readonly status?: number) {

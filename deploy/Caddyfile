@@ -1,0 +1,40 @@
+{
+    admin off
+    servers {
+        protocols h1 h2
+    }
+}
+
+https://{$DOMAIN} {
+    @cross_site_write {
+        method POST
+        header Origin *
+        not header Origin https://{$DOMAIN}
+    }
+    @api path /api /api/*
+    # Literal order keeps the write-origin guard ahead of API dispatch.
+    route {
+        header {
+            X-Content-Type-Options nosniff
+            Referrer-Policy no-referrer
+            X-Frame-Options DENY
+            -Server
+        }
+        # CORS is not authorization. Protect the synthetic judge/demo workspace.
+        basic_auth {
+            {$DEMO_USER} {$DEMO_PASSWORD_HASH}
+        }
+        respond @cross_site_write "Cross-origin writes are not permitted" 403
+        encode gzip zstd
+        handle @api {
+            reverse_proxy api:8000 {
+                header_up -Authorization
+            }
+        }
+        handle {
+            root * /srv
+            try_files {path} /index.html
+            file_server
+        }
+    }
+}

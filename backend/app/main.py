@@ -3,6 +3,9 @@
 from app.env import load_local_env
 load_local_env()
 
+from app.deployment import DEV_ORIGINS, allowed_origins, validate_production
+validate_production()  # Before route import can initialize SQLite.
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,15 +19,9 @@ app = FastAPI(title="RydeResolve Case API", version="0.2.0")
 # another one..."), so a fixed pair of origins breaks the moment a stale dev
 # server holds 5173. Allow the whole local dev range instead: this is a
 # localhost-only prototype and the origin is still restricted to loopback.
-DEV_ORIGINS = [
-    f"http://{host}:{port}"
-    for host in ("localhost", "127.0.0.1")
-    for port in range(5173, 5181)
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=DEV_ORIGINS,
+    allow_origins=allowed_origins(),
     # Credentials stay disabled: this API needs no cookies or auth headers, and
     # keeping it off avoids the wildcard-plus-credentials hazard.
     allow_credentials=False,

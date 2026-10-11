@@ -19,11 +19,12 @@ function ClaimCard({ claim, side }: { claim: AdvocateClaim; side: string }) {
   return (
     <article className="claim">
       <div className="claim-top">
-        <b className="verified">VERIFIED</b>
+        <b className="verified">ACCEPTED BY CODE</b>
         <code>{namespaceClaimId(side, claim.claimId)}</code>
         <span className={`importance ${claim.importance.toLowerCase()}`}>{claim.importance}</span>
       </div>
       <p>{claim.claim}</p>
+      {claim.propositions?.map(p => <div key={p.propositionId} className="proposition-detail"><small>{p.propositionId} · {labelize(p.kind)} · {labelize(p.status)}</small><p>{p.trustedSummary ?? p.detail}</p><small>{p.reason ?? ""} {p.evidenceIds.join(", ")} {p.policyRuleIds.join(", ")}</small></div>)}
       {claim.assertedFacts.length > 0 && (
         <div className="asserted-facts">
           {claim.assertedFacts.map((fact) => (
@@ -51,6 +52,7 @@ function RejectedCard({ claim, side }: { claim: RejectedClaim; side: string }) {
         <code>{namespaceClaimId(side, claim.claimId)}</code>
       </div>
       <p>{claim.claim}</p>
+      {claim.propositions?.map(p => <div key={p.propositionId}><small>{p.propositionId} · {labelize(p.kind)} · {labelize(p.status)}</small><p>{p.detail}</p><small>{p.reason}</small></div>)}
       <small className="rejected">{claim.reason}</small>
       <p className="reasoning">{claim.detail}</p>
       {claim.evidenceIds.length > 0 && (
@@ -82,6 +84,10 @@ function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
           <span>{execution.provider}</span>
           {execution.model && <span>{execution.model}</span>}
           <span>{execution.durationMs} ms</span>
+          {execution.httpStatus != null && <span>HTTP {execution.httpStatus}</span>}
+          {execution.attemptCount != null && <span>{execution.attemptCount} attempts</span>}
+          {execution.retryAfterSeconds != null && <span>Retry after {execution.retryAfterSeconds} seconds</span>}
+          {execution.failureCode && <span>{execution.failureCode}</span>}
           {execution.totalTokens !== null && <span>{execution.totalTokens} tokens</span>}
           {execution.generatedClaimCount > 0 && (
             <span>{execution.generatedClaimCount} claims generated</span>

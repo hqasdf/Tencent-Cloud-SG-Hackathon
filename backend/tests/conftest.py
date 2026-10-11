@@ -46,6 +46,9 @@ os.environ["AGENT_CHECKPOINT_DIR"] = str(_storage / "checkpoints")
 os.environ["REPLAY_ARTIFACT_DIR"] = str(_storage / "replay")
 os.environ["REPLAY_API_ENABLED"] = "0"
 os.environ["AGENT_MAX_TOKENS"] = "1024"
+os.environ["APP_ENV"] = "test"
+os.environ["CORS_ALLOWED_ORIGINS"] = ""
+os.environ["INTAKE_DB_PATH"] = ""
 
 # Force the advocates onto the deterministic, offline provider.
 os.environ["AGENT_MODE"] = "mock"

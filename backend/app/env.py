@@ -23,6 +23,7 @@ environment instead (see ``tests/conftest.py``).
 from __future__ import annotations
 
 from functools import lru_cache
+import os
 from pathlib import Path
 
 # backend/app/env.py -> backend/.env
@@ -40,6 +41,8 @@ def load_local_env() -> bool:
     production-style deployment that injects real environment variables is not
     blocked by a development convenience.
     """
+    if os.getenv("APP_ENV", "development").strip().lower() == "production":
+        return False  # Production credentials/configuration come from the server environment.
     if not ENV_FILE.is_file():
         return False
     try:

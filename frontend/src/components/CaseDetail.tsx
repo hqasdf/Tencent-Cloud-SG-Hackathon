@@ -5,7 +5,7 @@ import type { IntakeCase } from "../types/intake";
 import type { ResolutionRunResult } from "../services/caseService";
 import { intakeService } from "../services/intakeService";
 import { AdvocateArguments } from "./AdvocateRun";
-import { CrossExaminationPanel, TrustSequence } from "./CrossExaminationPanel";
+import { CrossExaminationPanel } from "./CrossExaminationPanel";
 import { ExplanationPanel } from "./ExplanationPanel";
 import { IntakeChatPanel } from "./IntakeChatPanel";
 import { ReplayBadge, ReplayInvalidBadge } from "./ReplayBadge";
@@ -14,40 +14,12 @@ import { DeterministicAnalysisPanel } from "./DeterministicAnalysis";
 import { StepPending, WorkflowRail, WorkflowStep, type StepState } from "./WorkflowStep";
 import { bothSettledOk, isSettledNotOk, isSettledOk } from "../types/workflow";
 import type { SideStages, StageState } from "../types/workflow";
-import { labelize, money } from "../utils/format";
+import { AiReviewTimeline } from "./AiReviewTimeline";
+import { humanize, labelize, money } from "../utils/format";
 import {
-  aiReviewLabel,
-  deterministicResultLabel,
-  intakeProgressLabel,
-  resolutionProgress,
   resolutionIntakeLabel,
   rateLimitMessage
 } from "../utils/uiContracts";
-
-/**
- * The case workspace.
- *
- * This is a numbered workflow rather than a report. The previous version was a
- * single scroll of roughly sixteen sections: the answer — outcome, refund,
- * confidence — sat at the bottom, after the timeline, the evidence table and an
- * audit log, and the same numbers appeared in up to three places. An operator
- * triaging a queue could not tell what to read first, or which of the two run
- * buttons was the one they wanted.
- *
- * The rules this file follows:
- *
- *  - One primary action. "Run full analysis" appears exactly once, in the
- *    toolbar. The cheaper advocates-only path is a subordinate ghost button
- *    beside it and disappears once a full run exists.
- *  - Every number has one home. The deterministic outcome is stated in the
- *    decision step and nowhere else; confidence is stated in the facts step
- *    and nowhere else.
- *  - No internal stage names. "Stage 4", "Stage 5", "Stage 6" and "the panel
- *    above" are developer vocabulary; the steps are named after what the
- *    operator is looking at.
- *  - The Judge never looks authoritative. It gets its own step, framed as
- *    advisory, immediately before the step that states what code will do.
- */
 
 export interface CaseDetailProps {
   caseData: DisputeCase;
@@ -63,58 +35,14 @@ export interface CaseDetailProps {
   onRunDemo?: () => void;
 }
 
-const STEPS: { title: string; short: string; summary: string }[] = [
-  {
-    title: "AI intake interviews",
-    short: "AI intake",
-    summary: "The AI interviews the rider and driver to gather each side's account."
-  },
-  {
-    title: "Review the case",
-    short: "The case",
-    summary: "What the rider and the driver each say, and the trip record."
-  },
-  {
-    title: "Examine the evidence",
-    short: "Evidence",
-    summary: "The timeline and every item on file."
-  },
-  {
-    title: "Check the facts",
-    short: "The facts",
-    summary: "What the numbers and the policy rules actually show."
-  },
-  {
-    title: "Read the arguments",
-    short: "Arguments",
-    summary: "Each side's claims, with code checking every one of them."
-  },
-  {
-    title: "Cross-examination",
-    short: "Cross-exam",
-    summary: "One bounded round of responses to the verified claims."
-  },
-  {
-    title: "The Judge's view",
-    short: "Judge",
-    summary: "A recommendation only. It cannot change the outcome."
-  },
-  {
-    title: "The decision",
-    short: "Decision",
-    summary: "What code will actually do — the refund, and whether a human is needed."
-  },
-  {
-    title: "Why this decision",
-    short: "Why",
-    summary: "The decisive facts, the policy thresholds, and the audit trail."
-  }
+const STEPS = [
+  { title: "Hear Both Sides", short: "Both sides", summary: "Rider and driver accounts" },
+  { title: "Check the Evidence", short: "Evidence", summary: "Trip records, policy and disputed facts" },
+  { title: "AI Review", short: "AI review", summary: "Five roles, with claims checked by code" },
+  { title: "Final Decision", short: "Decision", summary: "Code-calculated outcome and next steps" }
 ];
-
-const TOTAL_STEPS = STEPS.length;
-
-/** Where the full-analysis result is produced, so a finished run can jump here. */
-const FIRST_LIVE_STEP = 5;
+const TOTAL_STEPS = 4;
+const FIRST_LIVE_STEP = 3;
 
 // ---------------------------------------------------------------------------
 // Intake analysis helpers
@@ -138,12 +66,6 @@ function extractPartyContradictions(intakeCase: IntakeCase | null): PartyContrad
   return raw as PartyContradiction[];
 }
 
-/** Extract the full intake analysis object from the intake case, if present. */
-function extractIntakeAnalysis(intakeCase: IntakeCase | null): Record<string, unknown> | null {
-  if (!intakeCase?.finalAnalysis) return null;
-  return intakeCase.finalAnalysis as Record<string, unknown>;
-}
-
 /** A compact panel showing what each party stated during the AI intake interview. */
 function PartyStatementsPanel({ statements }: { statements: PartyStatement[] }) {
   if (statements.length === 0) return null;
@@ -160,9 +82,10 @@ function PartyStatementsPanel({ statements }: { statements: PartyStatement[] }) 
               <ul className="party-fact-list">
                 {ps.facts.map((f, i) => (
                   <li key={i}>
-                    <code>{f.key}</code>
+                    <span>{labelize(f.key)}</span>
                     <span>{f.value}</span>
-                    <small>{labelize(f.evidenceStatus ?? "ALLEGED")} · {f.sourceMessageId ? `Source: ${f.sourceMessageId}` : "Source unavailable"}</small>
+                    <small>{humanize(f.evidenceStatus ?? "ALLEGED")}</small>
+                    <details><summary>Source details</summary><small>{f.sourceMessageId ?? "Source unavailable"} {f.evidenceIds?.join(", ")}</small></details>
                   </li>
                 ))}
               </ul>
@@ -186,16 +109,14 @@ function PartyContradictionBanner({ contradictions }: { contradictions: PartyCon
         </div>
       </div>
       <p className="judge-boundary-note">
-        These are differences between party accounts, not proof of dishonesty. Code compares
-        recognized facts with trusted evidence. Unresolved differences require human review;
-        interview statements cannot change the calculated refund.
+        Different accounts are not proof of dishonesty. Unresolved disagreements need human review.
       </p>
       <div className="contradiction-list">
         {contradictions.map((c, i) => (
           <div className="contradiction-row" key={i}>
-            <code>{c.factKey}</code>
+            <span>{labelize(c.factKey)}</span>
             <small>{c.status === "RESOLVED_BY_EVIDENCE" ? `Resolved by evidence: ${c.supportedValue}` : "Disputed · requires review"}</small>
-            <small>Sources: {c.riderSourceMessageId ?? "unavailable"} / {c.driverSourceMessageId ?? "unavailable"}</small>
+            <details><summary>Source details</summary><small>{c.riderSourceMessageId ?? "unavailable"} / {c.driverSourceMessageId ?? "unavailable"} {c.evidenceIds?.join(", ")}</small></details>
             <div className="contradiction-claims">
               <div>
                 <small>Rider said</small>
@@ -213,76 +134,6 @@ function PartyContradictionBanner({ contradictions }: { contradictions: PartyCon
   );
 }
 
-/** Summary of the intake analysis — shown right after the AI interviews complete.
- *  Surfaces the dispute type, confidence, resolution mode, party statements,
- *  and contradictions so the operator sees the intake contribution immediately. */
-function IntakeAnalysisSummary({
-  intakeAnalysis,
-  partyStatements,
-  partyContradictions,
-}: {
-  intakeAnalysis: Record<string, unknown> | null;
-  partyStatements: PartyStatement[];
-  partyContradictions: PartyContradiction[];
-}) {
-  if (!intakeAnalysis) return null;
-
-  const confidence = intakeAnalysis.confidence as Record<string, number> | undefined;
-  const resolutionMode = intakeAnalysis.resolutionMode as string | undefined;
-  const disputeType = intakeAnalysis.disputeType as string | undefined;
-  const escalationReasons = (intakeAnalysis.escalationReasons as string[]) ?? [];
-  const overallConfidence = confidence?.overallConfidence;
-  const isHumanReview = resolutionMode === "HUMAN_REVIEW";
-
-  return (
-    <section className={`intake-analysis-summary ${isHumanReview ? "review" : "auto"}`}>
-      <div className="intake-analysis-header">
-        <span className="eyebrow">AI intake analysis</span>
-        <h3>What the intake interviews found</h3>
-      </div>
-
-      <div className="intake-analysis-stats">
-        {disputeType && (
-          <div>
-            <small>Detected dispute</small>
-            <b>{labelize(disputeType)}</b>
-          </div>
-        )}
-        {overallConfidence !== undefined && (
-          <div>
-            <small>Confidence</small>
-            <b>{Math.round(overallConfidence * 100)}%</b>
-          </div>
-        )}
-        {resolutionMode && (
-          <div>
-            <small>Resolution mode</small>
-            <b className={isHumanReview ? "review" : "auto"}>
-              {isHumanReview ? "Human review" : "Auto resolve"}
-            </b>
-          </div>
-        )}
-        {partyStatements.length > 0 && (
-          <div>
-            <small>Party facts extracted</small>
-            <b>{partyStatements.reduce((n, ps) => n + ps.facts.length, 0)}</b>
-          </div>
-        )}
-      </div>
-
-      {escalationReasons.length > 0 && (
-        <p className="review-reason">
-          Escalation: {escalationReasons.map((r) => r.replace(/_/g, " ").toLowerCase()).join(" · ")}
-        </p>
-      )}
-
-      <PartyStatementsPanel statements={partyStatements} />
-      <PartyContradictionBanner contradictions={partyContradictions} />
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -330,7 +181,6 @@ export function CaseDetail({
   const partyContradictions = useMemo(() => resolutionRun
     ? resolutionRun.intakeContext?.partyContradictions ?? []
     : extractPartyContradictions(intakeCase), [intakeCase, resolutionRun]);
-  const intakeAnalysis = useMemo(() => extractIntakeAnalysis(intakeCase), [intakeCase]);
 
   // When the intake interviews are complete (READY_FOR_ANALYSIS), auto-run the
   // intake analysis so party statements and contradiction detection are
@@ -365,10 +215,9 @@ export function CaseDetail({
 
   // When intake completes, auto-advance to step 2 (Review the case)
   useEffect(() => {
-    if (intakeComplete && openStep === 1) setOpenStep(2);
-  }, [intakeComplete, openStep]);
+    if (intakeComplete) setOpenStep(current => current === 1 ? 2 : current);
+  }, [intakeComplete]);
 
-  const hasArguments = resolutionRun !== null || advocateRun !== null;
 
   /**
    * The backend's own verdict on each stage. When it is present it is the only
@@ -412,470 +261,78 @@ export function CaseDetail({
   }
 
   function stateFor(index: number): StepState {
-    // Step 1: AI intake
     if (index === 1) return intakeComplete ? "done" : "ready";
-    // Steps 2-3: case review, evidence — always available (static data)
-    if (index <= 3) return "done";
-    // Step 4: deterministic analysis (facts)
-    if (index === 4) return fromStage(workflow?.deterministic, "done");
-    // Step 5: advocates
-    if (index === 5) {
-      return workflow ? fromPair(workflow.advocates, "ready") : hasArguments ? "done" : "ready";
-    }
-    // Without a state machine there is no evidence that a later stage ran, so
-    // the honest answer is "not run" rather than the optimistic "done".
-    if (!workflow) return "waiting";
-    // Step 6: rebuttals
-    if (index === 6) return fromPair(workflow.rebuttals, "waiting");
-    // Step 7: judge
-    if (index === 7) return fromStage(workflow.judge, "waiting");
-    // Step 8: final resolution / decision
-    if (index === 8) return fromStage(workflow.finalResolution, "waiting");
-    // Step 9: explanation
-    return fromStage(workflow.explanation, "waiting");
+    if (index === 2) return analysis ? fromStage(workflow?.deterministic, "done") : "waiting";
+    if (index === 4) return fromStage(workflow?.finalResolution, "waiting");
+    if (!workflow) return "ready";
+    const states = [fromPair(workflow.advocates, "waiting"), fromPair(workflow.rebuttals, "waiting"), fromStage(workflow.judge, "waiting")];
+    if (states.includes("failed")) return "failed";
+    if (states.includes("blocked")) return "blocked";
+    return states.every(state => state === "done") ? "done" : "waiting";
   }
-
-  const stepStates = STEPS.map((_, position) => stateFor(position + 1));
-  const pipelineProgress = resolutionProgress(stepStates);
-  const aiReviewComplete = [5, 6, 7].every((index) => stateFor(index) === "done");
-
-  /**
-   * Pill text for the two steps whose label describes a condition, not a state.
-   */
-  const startLabel = stateFor(5) === "ready" ? "Start here" : undefined;
-  const judgeLabel = stateFor(7) === "done" ? "Advisory" : undefined;
-  const toggle = (index: number) => setOpenStep((current) => (current === index ? 0 : index));
+  const aiReviewComplete = stateFor(3) === "done";
+  const busy = resolutionRunning || advocateRunning;
+  const decision = resolutionRun?.deterministicResolution;
+  const toggle = (index: number) => setOpenStep(current => current === index ? 0 : index);
+  const args = resolutionRun ?? advocateRun;
 
   return (
     <main className="content">
       <header className="case-header">
-        <div>
-          <div className="breadcrumb">Disputes / {caseData.id}</div>
+        <div><div className="breadcrumb">{caseData.id} · {labelize(caseData.disputeType)}</div>
           <h1>{caseData.title}</h1>
-          <p>{caseData.description}</p>
+          <span className="mode">{decision?.resolutionMode === "HUMAN_REVIEW" ? "Needs human review" : aiReviewComplete ? "Review complete" : busy ? "Analysis in progress" : "Ready to review"}</span>
         </div>
-        <div className="case-header-side">
-          <span className={`mode ${analysis ? "auto" : "neutral"}`}>
-            {deterministicResultLabel(analysis !== null)}
-          </span>
-          <span className={`mode ${aiReviewComplete ? "auto" : "neutral"}`}>
-            {aiReviewLabel(aiReviewComplete, resolutionRunning)}
-          </span>
-          <small>
-            Case disposition: {caseData.status} · {labelize(caseData.disputeType)}
-          </small>
-        </div>
+        {decision && <div className="case-header-side"><strong>{humanize(decision.recommendedAction)}</strong><b>{money(decision.refundAmount, decision.currency)}</b><small>Calculated by code</small></div>}
       </header>
-
       <section className="workflow-toolbar">
-        <div className="workflow-toolbar-left">
-          <strong>Resolution pipeline</strong>
-          <span className="workflow-progress">
-            <b>{pipelineProgress.done}</b> of {pipelineProgress.total} steps complete
-            {pipelineProgress.failed > 0 && (
-              <em className="workflow-flag failed">{pipelineProgress.failed} failed</em>
-            )}
-            {pipelineProgress.blocked > 0 && (
-              <em className="workflow-flag blocked">{pipelineProgress.blocked} blocked</em>
-            )}
-          </span>
-          <span className="workflow-progress">
-            AI Intake: <b>{intakeProgressLabel(intakeCase?.lifecycle, intakeComplete)}</b>
-          </span>
+        <div className="workflow-toolbar-left"><strong>{busy ? "Checking AI claims…" : decision ? "Review the decision" : intakeComplete ? "Ready for analysis" : "Hear both sides or review the existing case"}</strong>
+          {resolutionRun ? <><ReplayBadge metadata={resolutionRun.replayMetadata} /><ReplayInvalidBadge metadata={resolutionRun.replayMetadata} />
+            {!resolutionRun.replayMetadata.replayed && !resolutionRun.replayMetadata.reusedRoles?.length && <span className="mode-badge">{resolutionRun.replayMetadata.source === "MOCK_DEMO" ? "MOCK DEMO" : "LIVE"}</span>}</>
+            : advocateRun ? <span className="mode-badge">{advocateRun.agentRun.mode === "real" ? "LIVE" : "MOCK DEMO"}</span> : null}
         </div>
         <div className="workflow-toolbar-actions">
-          {/*
-            Provenance is stated once, here, where the button is — so it applies
-            to whatever the steps below are currently showing. A replayed run
-            never renders the model badge: `agentRun.mode` describes the
-            configured provider, not whether a model was actually called, and a
-            FULL_AI replay can legitimately report "real" while spending nothing.
-          */}
-          {resolutionRun ? (
-            <>
-              <ReplayBadge metadata={resolutionRun.replayMetadata} />
-              <ReplayInvalidBadge metadata={resolutionRun.replayMetadata} />
-              {!resolutionRun.replayMetadata.replayed && !resolutionRun.replayMetadata.reusedRoles?.length && (
-                <span className={`mode-badge ${resolutionRun.agentRun.mode}`}>
-                  {resolutionRun.replayMetadata.source === "MOCK_DEMO" ? "MOCK DEMO" : "LIVE"}
-                </span>
-              )}
-            </>
-          ) : advocateRun ? (
-            <span className={`mode-badge ${advocateRun.agentRun.mode}`}>
-              {advocateRun.agentRun.mode === "real" ? "LIVE" : "MOCK DEMO"}
-            </span>
-          ) : null}
-
-          <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning || advocateRunning}>
-            {resolutionRunning ? "Running analysis…" : resolutionRun ? "Retry / reuse completed work" : "Run full analysis"}
-          </button>
-          {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={resolutionRunning || advocateRunning}
-            title="Revalidate saved demonstration outputs without calling Gemini. Simulated outputs are labelled MOCK DEMO.">
-            Show saved demo (replay)
-          </button>}
-
-          {/* The cheaper two-call path. Subordinate, and only offered before a
-              full run exists — after that it would be a second, weaker button. */}
-          {!resolutionRun && (
-            <button
-              type="button"
-              className="wf-run-ghost"
-              onClick={onRunAdvocates}
-              disabled={advocateRunning || resolutionRunning}
-            >
-              {advocateRunning ? "Running advocates…" : "Advocates only"}
-            </button>
-          )}
+          <button type="button" className="wf-run" onClick={aiReviewComplete ? () => setOpenStep(4) : onRunResolution} disabled={busy}>{busy ? "Running analysis…" : aiReviewComplete ? "View decision" : resolutionRun ? "Retry AI review" : "Run analysis"}</button>
+          <details className="more-actions"><summary>More options</summary>
+            {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={busy}>View saved demo</button>}
+            {!resolutionRun && <button type="button" className="wf-run-ghost" onClick={onRunAdvocates} disabled={busy}>Advocates only</button>}
+            {aiReviewComplete && <button type="button" className="wf-run-ghost" onClick={onRunResolution} disabled={busy}>Run analysis again</button>}
+          </details>
         </div>
       </section>
-
-      {(resolutionError || advocateError) && (
-        <p className="workflow-alert">{resolutionError ?? advocateError}</p>
-      )}
-      {resolutionRun && <p className="workflow-notice" role="status">{resolutionIntakeLabel(resolutionRun.intakeContext)}</p>}
+      {(resolutionError || advocateError) && <div className="workflow-alert" role="alert">Analysis could not finish. Your saved work and evidence remain available. Retry or view a saved demo.<details><summary>Error details</summary>{resolutionError ?? advocateError}</details></div>}
       {quotaMessage && <p className="workflow-alert" role="alert">{quotaMessage}</p>}
-      {intakeAnalysisError && <p className="workflow-alert" role="alert">Intake review failed: {intakeAnalysisError}. Saved interviews remain available to full analysis.</p>}
-
-      {/*
-        One plain-language statement of what the AI half of the pipeline could
-        not do. Without it, an operator reading a case whose advocates failed
-        sees an empty arguments panel and an empty Judge panel and has to infer
-        the cause from two separate step bodies.
-      */}
-      {aiIncomplete && (
-        <p className="workflow-notice" role="status">
-          <b>The AI stages did not complete for this case.</b> Cross-examination and the
-          Judge&rsquo;s view could not run, so there is no AI recommendation. The decision and
-          the explanation below are calculated by code and are unaffected.
-        </p>
-      )}
-
+      {intakeAnalysisError && <div className="workflow-alert" role="alert">Statement review failed. Saved accounts remain available.<details><summary>Error details</summary>{intakeAnalysisError}</details></div>}
+      {aiIncomplete && !quotaMessage && <p className="workflow-notice" role="status">AI review is incomplete. The code-calculated decision remains available. Retry to reuse compatible saved stages.</p>}
       <WorkflowRail steps={STEPS} stateFor={stateFor} current={openStep} onSelect={setOpenStep} />
-
       <div className="workflow">
-        {/* Step 1: AI intake interviews */}
-        <WorkflowStep
-          index={1}
-          total={TOTAL_STEPS}
-          title={STEPS[0].title}
-          summary={STEPS[0].summary}
-          state={stateFor(1)}
-          stateLabel={intakeComplete ? undefined : "Start here"}
-          open={openStep === 1}
-          onToggle={() => toggle(1)}
-          onNext={() => setOpenStep(2)}
-        >
-          <IntakeChatPanel
-            sourceCaseId={caseData.id}
-            onLifecycleChange={handleIntakeChange}
-          />
-          <IntakeAnalysisSummary
-            intakeAnalysis={intakeAnalysis}
-            partyStatements={partyStatements}
-            partyContradictions={partyContradictions}
-          />
+        <WorkflowStep index={1} total={TOTAL_STEPS} {...STEPS[0]} state={stateFor(1)} open={openStep === 1} onToggle={() => toggle(1)} onNext={() => setOpenStep(2)}>
+          <p className="judge-boundary-note">Statements are allegations until checked against evidence.</p>
+          <IntakeChatPanel sourceCaseId={caseData.id} onLifecycleChange={handleIntakeChange} />
+          {partyStatements.some(p => p.facts.length) && <PartyStatementsPanel statements={partyStatements} />}
+          <details className="view-details"><summary>Original accounts and trip</summary><section className="two-col"><article className="panel"><h3>Rider allegation</h3><p>{caseData.riderComplaint}</p></article><article className="panel"><h3>Driver allegation</h3><p>{caseData.driverResponse}</p></article></section><p>{caseData.trip.pickup} / {caseData.trip.destination}</p><p>Quoted {money(caseData.fare.quoted, caseData.fare.currency)} / Charged {money(caseData.fare.actual, caseData.fare.currency)}</p><small>Trip {caseData.trip.tripId} / Policy {caseData.metadata.policyVersion}</small><p>Rider: {caseData.rider.name} ({caseData.rider.id}) / Driver: {caseData.driver.name} ({caseData.driver.id})</p><small>Priority {caseData.metadata.priority} / Submitted {caseData.metadata.submittedAt} / Updated {caseData.metadata.lastUpdated}</small></details>
         </WorkflowStep>
-
-        {/* Step 2: Review the case */}
-        <WorkflowStep
-          index={2}
-          total={TOTAL_STEPS}
-          title={STEPS[1].title}
-          summary={STEPS[1].summary}
-          state={stateFor(2)}
-          open={openStep === 2}
-          onToggle={() => toggle(2)}
-          onPrev={() => setOpenStep(1)}
-          onNext={() => setOpenStep(3)}
-        >
-          <section className="two-col">
-            <article className="panel">
-              <span className="eyebrow">Rider complaint</span>
-              <p>"{caseData.riderComplaint}"</p>
-              <small>
-                {caseData.rider.name} · {caseData.rider.id}
-              </small>
-            </article>
-            <article className="panel">
-              <span className="eyebrow">Driver response</span>
-              <p>"{caseData.driverResponse}"</p>
-              <small>
-                {caseData.driver.name} · {caseData.driver.id}
-              </small>
-            </article>
-          </section>
-          <section className="summary-grid">
-            <article>
-              <span>Trip</span>
-              <b>{caseData.trip.tripId}</b>
-              <small>
-                {caseData.trip.pickup} → {caseData.trip.destination}
-              </small>
-            </article>
-            <article>
-              <span>Fare difference</span>
-              <b>{money(caseData.fare.difference, caseData.fare.currency)}</b>
-              <small>
-                Quoted {money(caseData.fare.quoted, caseData.fare.currency)} · final{" "}
-                {money(caseData.fare.actual, caseData.fare.currency)}
-              </small>
-            </article>
-            <article>
-              <span>Case metadata</span>
-              <b>{caseData.metadata.priority} priority</b>
-              <small>
-                Policy {caseData.metadata.policyVersion} · updated {caseData.metadata.lastUpdated}
-              </small>
-            </article>
-          </section>
-          <PartyStatementsPanel statements={partyStatements} />
+        <WorkflowStep index={2} total={TOTAL_STEPS} {...STEPS[1]} state={stateFor(2)} open={openStep === 2} onToggle={() => toggle(2)} onPrev={() => setOpenStep(1)} onNext={() => setOpenStep(3)}>
           <PartyContradictionBanner contradictions={partyContradictions} />
+          <section className="panel"><h3>Evidence on file</h3><ul className="compact-evidence">{caseData.evidence.map(item => <li key={item.id}><span><b>{item.type}</b><span>{item.summary}</span></span><b className={`evidence-status ${item.status.toLowerCase()}`}>{item.status}</b><details><summary>Details</summary><small>{item.id} / {item.source} / {item.timestamp}</small></details></li>)}</ul></section>
+          <details className="view-details"><summary>Trip timeline</summary>{caseData.timeline.map(event => <p key={event.id}><b>{event.timestamp} / {event.type}</b> {event.description}<small> {event.evidenceIds.join(", ")}</small></p>)}</details>
+          <details className="view-details"><summary>Calculations and policy checks</summary>{analysis ? <DeterministicAnalysisPanel value={analysis} /> : <p>Evidence checks could not be loaded.</p>}</details>
         </WorkflowStep>
-
-        {/* Step 3: Examine the evidence */}
-        <WorkflowStep
-          index={3}
-          total={TOTAL_STEPS}
-          title={STEPS[2].title}
-          summary={STEPS[2].summary}
-          state={stateFor(3)}
-          open={openStep === 3}
-          onToggle={() => toggle(3)}
-          onPrev={() => setOpenStep(2)}
-          onNext={() => setOpenStep(4)}
-        >
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">Timeline</span>
-                <h3>What happened, in order</h3>
-              </div>
-            </div>
-            <div className="timeline">
-              {caseData.timeline.map((event) => (
-                <div key={event.id} className={`timeline-event ${event.severity ?? "normal"}`}>
-                  <time>{event.timestamp}</time>
-                  <i />
-                  <div>
-                    <b>{event.type}</b>
-                    <p>{event.description}</p>
-                    <code>{event.evidenceIds.join(" · ")}</code>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <span className="eyebrow">Evidence</span>
-                <h3>Case record</h3>
-              </div>
-              <span className="evidence-count">{caseData.evidence.length} items</span>
-            </div>
-            <div className="evidence-table">
-              <div className="table-head">
-                <span>ID</span>
-                <span>Type</span>
-                <span>Source</span>
-                <span>Summary</span>
-                <span>Status</span>
-              </div>
-              {caseData.evidence.map((item) => (
-                <div className="evidence-row" key={item.id}>
-                  <code>{item.id}</code>
-                  <span>{item.type}</span>
-                  <span>{item.source}</span>
-                  <span>{item.summary}</span>
-                  <b className={`evidence-status ${item.status.toLowerCase()}`}>{item.status}</b>
-                </div>
-              ))}
-            </div>
-          </section>
+        <WorkflowStep index={3} total={TOTAL_STEPS} {...STEPS[2]} state={stateFor(3)} open={openStep === 3} onToggle={() => toggle(3)} onPrev={() => setOpenStep(2)} onNext={() => setOpenStep(4)}>
+          <p className="judge-boundary-note">AI argues; code checks claims. The Judge advises and cannot set a refund.</p>
+          {resolutionRun && <p className="workflow-notice">{resolutionIntakeLabel(resolutionRun.intakeContext)}</p>}
+          {args ? <>
+            <AiReviewTimeline rider={args.rider} driver={args.driver} resolution={resolutionRun} />
+            <details className="view-details"><summary>View details: advocate claims and verification</summary><AdvocateArguments rider={args.rider} driver={args.driver} pipeline={args.pipeline} verificationSummary={args.verificationSummary} /></details>
+            {resolutionRun && <><details className="view-details"><summary>View details: rebuttals and verification</summary><CrossExaminationPanel rebuttals={resolutionRun.rebuttals} /></details><details className="view-details"><summary>View details: Judge validation</summary><JudgeAdvisoryPanel judge={resolutionRun.judge} /></details></>}
+          </> : <StepPending title="Ready for AI review">Choose Run analysis to check all five roles.</StepPending>}
         </WorkflowStep>
-
-        {/* Step 4: Check the facts */}
-        <WorkflowStep
-          index={4}
-          total={TOTAL_STEPS}
-          title={STEPS[3].title}
-          summary={STEPS[3].summary}
-          state={stateFor(4)}
-          open={openStep === 4}
-          onToggle={() => toggle(4)}
-          onPrev={() => setOpenStep(3)}
-          onNext={() => setOpenStep(5)}
-        >
-          {analysis ? (
-            <DeterministicAnalysisPanel value={analysis} />
-          ) : (
-            <StepPending title="Not available">
-              The calculated facts for this case could not be loaded.
-            </StepPending>
-          )}
-        </WorkflowStep>
-
-        {/* Step 5: Read the arguments */}
-        <WorkflowStep
-          index={5}
-          total={TOTAL_STEPS}
-          title={STEPS[4].title}
-          summary={STEPS[4].summary}
-          state={stateFor(5)}
-          stateLabel={startLabel}
-          open={openStep === 5}
-          onToggle={() => toggle(5)}
-          onPrev={() => setOpenStep(4)}
-          onNext={() => setOpenStep(6)}
-        >
-          {resolutionRun ? (
-            <AdvocateArguments
-              rider={resolutionRun.rider}
-              driver={resolutionRun.driver}
-              pipeline={resolutionRun.pipeline}
-              verificationSummary={resolutionRun.verificationSummary}
-            />
-          ) : advocateRun ? (
-            <>
-              <p className="judge-boundary-note">
-                Advocates only. Cross-examination, the Judge and the decision have not run yet —
-                use <b>Run full analysis</b> above to complete the workflow.
-              </p>
-              <AdvocateArguments
-                rider={advocateRun.rider}
-                driver={advocateRun.driver}
-                pipeline={advocateRun.pipeline}
-                verificationSummary={advocateRun.verificationSummary}
-              />
-            </>
-          ) : (
-            <StepPending title="No arguments yet">
-              Running the analysis asks a Rider advocate and a Driver advocate to argue from the
-              facts code has already calculated. Every claim they make is then checked against the
-              case record, and anything that fails the check is thrown away before the Judge sees
-              it. Use <b>Run full analysis</b> above to produce them.
-            </StepPending>
-          )}
-        </WorkflowStep>
-
-        {/* Step 6: Cross-examination */}
-        <WorkflowStep
-          index={6}
-          total={TOTAL_STEPS}
-          title={STEPS[5].title}
-          summary={STEPS[5].summary}
-          state={stateFor(6)}
-          open={openStep === 6}
-          onToggle={() => toggle(6)}
-          onPrev={() => setOpenStep(5)}
-          onNext={() => setOpenStep(7)}
-        >
-          {resolutionRun ? (
-            <CrossExaminationPanel rebuttals={resolutionRun.rebuttals} />
-          ) : (
-            <StepPending title="Not run yet">
-              Cross-examination is part of a full analysis run. It gives each side exactly one
-              chance to answer the other's verified claims, then checks those answers the same way.
-            </StepPending>
-          )}
-        </WorkflowStep>
-
-        {/* Step 7: The Judge's view */}
-        <WorkflowStep
-          index={7}
-          total={TOTAL_STEPS}
-          title={STEPS[6].title}
-          summary={STEPS[6].summary}
-          state={stateFor(7)}
-          stateLabel={judgeLabel}
-          open={openStep === 7}
-          onToggle={() => toggle(7)}
-          onPrev={() => setOpenStep(6)}
-          onNext={() => setOpenStep(8)}
-        >
-          {resolutionRun ? (
-            <JudgeAdvisoryPanel judge={resolutionRun.judge} />
-          ) : (
-            <StepPending title="Not run yet">
-              The Judge only sees material that has passed verification in the steps above. Its
-              recommendation is advisory — the authoritative outcome is calculated by code in the
-              next step.
-            </StepPending>
-          )}
-        </WorkflowStep>
-
-        {/* Step 8: The decision */}
-        <WorkflowStep
-          index={8}
-          total={TOTAL_STEPS}
-          title={STEPS[7].title}
-          summary={STEPS[7].summary}
-          state={stateFor(8)}
-          open={openStep === 8}
-          onToggle={() => toggle(8)}
-          onPrev={() => setOpenStep(7)}
-          onNext={() => setOpenStep(9)}
-        >
-          {resolutionRun ? (
-            <>
-              <PartyContradictionBanner contradictions={partyContradictions} />
-              <DeterministicOutcomePanel resolution={resolutionRun.deterministicResolution} />
-              {/*
-                Not `caseData.humanReviewSummary`. That field is the server's
-                "Deterministic escalation reasons: A, B, C" string, which is the
-                same list the outcome panel above already renders — and renders
-                in readable words rather than raw enum codes. Showing both was
-                the duplicate this redesign set out to remove. What is genuinely
-                missing for an operator is the consequence, so that is what this
-                states instead.
-              */}
-              {resolutionRun.deterministicResolution.resolutionMode === "HUMAN_REVIEW" && (
-                <section className="human-review">
-                  <span className="eyebrow">Action required</span>
-                  <p>
-                    The deterministic engine will not act on this case by itself. It is escalated
-                    for a human decision, for the reasons listed above.
-                  </p>
-                </section>
-              )}
-              <TrustSequence />
-            </>
-          ) : (
-            <StepPending title="Not run yet">
-              The refund, the confidence and whether a human is needed are all calculated by code
-              once the steps above have run. Nothing the Judge recommends moves these values.
-            </StepPending>
-          )}
-        </WorkflowStep>
-
-        {/* Step 9: Why this decision */}
-        <WorkflowStep
-          index={9}
-          total={TOTAL_STEPS}
-          title={STEPS[8].title}
-          summary={STEPS[8].summary}
-          state={stateFor(9)}
-          open={openStep === 9}
-          onToggle={() => toggle(9)}
-          onPrev={() => setOpenStep(8)}
-          nextLabel="Back to the case"
-          onNext={() => setOpenStep(1)}
-        >
-          {resolutionRun ? (
-            <>
-              <ExplanationPanel
-                explanation={resolutionRun.explanation}
-                counterfactual={resolutionRun.counterfactual}
-              />
-              <AuditTrail events={resolutionRun.audit} />
-            </>
-          ) : (
-            <StepPending title="Not run yet">
-              This is assembled from the run: which facts were decisive, which policy thresholds
-              were met, and what would have had to be different for the outcome to change.
-            </StepPending>
-          )}
+        <WorkflowStep index={4} total={TOTAL_STEPS} {...STEPS[3]} state={stateFor(4)} open={openStep === 4} onToggle={() => toggle(4)} onPrev={() => setOpenStep(3)}>
+          {decision ? <><DeterministicOutcomePanel resolution={decision} />
+            {decision.resolutionMode === "HUMAN_REVIEW" && <p className="human-review">A person must review this case before a refund or charge is approved.</p>}
+            <details className="view-details"><summary>Why this decision</summary><ExplanationPanel explanation={resolutionRun!.explanation} counterfactual={resolutionRun!.counterfactual} /></details>
+            <details className="view-details"><summary>Audit trail</summary><AuditTrail events={resolutionRun!.audit} /></details>
+          </> : <StepPending title="Run analysis to view the final decision">Evidence checks are available in step 2. AI recommendations never control the refund.</StepPending>}
         </WorkflowStep>
       </div>
     </main>

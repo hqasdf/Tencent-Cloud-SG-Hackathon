@@ -7,8 +7,10 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
 } from "../types/intake";
+import { resolveApiBaseUrl } from "../utils/apiConfig";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD,
+  import.meta.env.PROD ? "" : "http://localhost:8000");
 
 export class IntakeApiError extends Error {
   constructor(message: string, public readonly status?: number, public readonly code?: string) {
