@@ -172,9 +172,17 @@ class DecisionExplanation(ExplanationModel):
 class CounterfactualThreshold(ExplanationModel):
     """One policy threshold and what crossing it would have meant.
 
-    ``direction`` is derived from how the rule is evaluated, not chosen: a
-    minimum-wait rule fails when the wait goes *below* its threshold, while a
-    pickup-radius rule fails when the distance goes *above* it.
+    ``comparison_operator`` states the rule itself, including what happens at
+    equality. ``change_direction`` states the movement from the recorded value
+    that would flip this rule's current result. These are deliberately separate:
+    for an ``actual >= threshold`` rule, a passing value would have to decrease
+    below the threshold to fail, while a failing value would have to increase to
+    the threshold or above to pass.
+
+    ``direction`` is retained for response compatibility. It is the direction
+    in which the rule *fails*, not necessarily the direction the current value
+    needs to move. New clients should use ``comparisonOperator`` and
+    ``changeDirection``.
     """
 
     rule_id: str = Field(serialization_alias="ruleId", validation_alias="ruleId")
@@ -185,7 +193,27 @@ class CounterfactualThreshold(ExplanationModel):
     threshold: float | int | bool | str = Field(
         serialization_alias="threshold", validation_alias="threshold"
     )
-    direction: Literal["BELOW", "ABOVE"]
+    direction: Literal["BELOW", "ABOVE"] = Field(
+        description=(
+            "Legacy rule-failure direction. BELOW means the rule fails below "
+            "the threshold; ABOVE means it fails above the threshold."
+        )
+    )
+    comparison_operator: Literal["GREATER_THAN_OR_EQUAL", "LESS_THAN_OR_EQUAL"] = Field(
+        serialization_alias="comparisonOperator",
+        validation_alias="comparisonOperator",
+        description="The inclusive comparison used by the policy rule.",
+    )
+    change_direction: Literal[
+        "INCREASE_TO_OR_ABOVE",
+        "DECREASE_BELOW",
+        "DECREASE_TO_OR_BELOW",
+        "INCREASE_ABOVE",
+    ] = Field(
+        serialization_alias="changeDirection",
+        validation_alias="changeDirection",
+        description="The exact movement that would flip the current rule result.",
+    )
     passed: bool
     statement: str
 

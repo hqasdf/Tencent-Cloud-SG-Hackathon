@@ -1,6 +1,5 @@
-# Load backend/.env BEFORE any app imports — the intake router instantiates
-# ConversationService at module level, which reads GEMINI_API_KEY from the
-# environment. Without this ordering, .env keys are invisible to that service.
+# Load backend/.env before importing routes. Intake resolves the configured
+# provider lazily, so missing AI configuration cannot prevent FastAPI startup.
 from app.env import load_local_env
 load_local_env()
 

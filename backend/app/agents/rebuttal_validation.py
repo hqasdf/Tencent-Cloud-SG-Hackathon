@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from app.agents.claim_verification import fact_values, values_match
 from app.agents.monetary import invented_monetary_amounts
 from app.agents.rebuttal_ids import namespace_rebuttal_id
-from app.models.advocate import AdvocateClaim
+from app.models.advocate import TrustedClaim
 from app.models.rebuttal import (
     CONCEDING_STANCES,
     RebuttalCaseContext,
@@ -168,8 +168,8 @@ class RebuttalValidationService:
         self,
         *,
         response: object,
-        own_index: dict[str, AdvocateClaim],
-        opposing_index: dict[str, AdvocateClaim],
+        own_index: dict[str, TrustedClaim],
+        opposing_index: dict[str, TrustedClaim],
         evidence_ids: set[str],
         policy_ids: set[str],
         trusted: dict[str, object],
@@ -316,7 +316,7 @@ class RebuttalValidationService:
     # -- helpers ----------------------------------------------------------
 
     @staticmethod
-    def _index(claims: list[AdvocateClaim]) -> dict[str, AdvocateClaim]:
+    def _index(claims: list[TrustedClaim]) -> dict[str, TrustedClaim]:
         """Namespaced claim ID -> claim. IDs are already namespaced by the builder."""
         return {claim.claim_id: claim for claim in claims}
 

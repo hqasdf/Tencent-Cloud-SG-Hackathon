@@ -28,7 +28,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.advocate import (
-    AdvocateClaim,
+    TrustedClaim,
     AdvocateSideResult,
     PipelineStage,
     VerificationSummary,
@@ -175,7 +175,7 @@ class JudgeSideClaims(JudgeCaseModel):
     has_verified_claims: bool = Field(
         serialization_alias="hasVerifiedClaims", validation_alias="hasVerifiedClaims"
     )
-    verified_claims: list[AdvocateClaim] = Field(
+    verified_claims: list[TrustedClaim] = Field(
         default_factory=list,
         serialization_alias="verifiedClaims",
         validation_alias="verifiedClaims",

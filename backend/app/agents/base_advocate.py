@@ -16,7 +16,7 @@ from app.agents.provider import (
 from app.agents.providers.openai_compatible import parse_json_object
 from app.agents.provider_schema import provider_schema_for
 from app.agents.typed_call import ModelOutputContractError, complete_typed
-from app.models.advocate import AdvocateOutput
+from app.models.advocate import ATOMIC_PROPOSITION_VERSION, AdvocateOutput
 from app.models.agent import AgentCaseContext
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
@@ -199,6 +199,15 @@ class BaseAdvocateAgent:
             raise AdvocateAgentError(
                 f"advocate returned side {output.side!r} but was assigned {self.side!r}",
                 code=AdvocateOutputErrorCode.WRONG_SIDE,
+                completion=completion,
+            )
+        if output.contract_version != ATOMIC_PROPOSITION_VERSION:
+            raise AdvocateAgentError(
+                (
+                    "advocate output omitted the required atomic proposition contract "
+                    f"version {ATOMIC_PROPOSITION_VERSION!r}"
+                ),
+                code=AdvocateOutputErrorCode.SCHEMA_VALIDATION_FAILED,
                 completion=completion,
             )
         return output

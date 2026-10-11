@@ -34,7 +34,7 @@ from app.models.replay import (
 )
 from app.replay.artifacts import ReplayArtifactBase
 from app.replay.hashing import deterministic_analysis_hash, trusted_context_hash
-from app.replay.versions import STAGE_SCHEMA_VERSIONS, SUPPORTED_REPLAY_VERSIONS
+from app.replay.versions import SUPPORTED_REPLAY_VERSIONS, SUPPORTED_STAGE_SCHEMA_VERSIONS
 
 
 class ReplayValidationService:
@@ -53,8 +53,8 @@ class ReplayValidationService:
         if artifact.replay_version not in SUPPORTED_REPLAY_VERSIONS:
             reasons.append(REPLAY_VERSION_UNSUPPORTED)
 
-        expected_schema = STAGE_SCHEMA_VERSIONS.get(artifact.stage)
-        if expected_schema is not None and artifact.schema_version != expected_schema:
+        supported_schemas = SUPPORTED_STAGE_SCHEMA_VERSIONS.get(artifact.stage)
+        if supported_schemas is not None and artifact.schema_version not in supported_schemas:
             reasons.append(SCHEMA_VERSION_MISMATCH)
 
         if artifact.case_id != case.id:

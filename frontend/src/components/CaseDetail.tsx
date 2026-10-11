@@ -15,6 +15,12 @@ import { StepPending, WorkflowRail, WorkflowStep, type StepState } from "./Workf
 import { bothSettledOk, isSettledNotOk, isSettledOk } from "../types/workflow";
 import type { SideStages, StageState } from "../types/workflow";
 import { labelize, money } from "../utils/format";
+import {
+  aiReviewLabel,
+  deterministicResultLabel,
+  intakeProgressLabel,
+  resolutionProgress
+} from "../utils/uiContracts";
 
 /**
  * The case workspace.
@@ -407,18 +413,14 @@ export function CaseDetail({
   }
 
   const stepStates = STEPS.map((_, position) => stateFor(position + 1));
-  const doneCount = stepStates.filter((state) => state === "done").length;
-  const failedCount = stepStates.filter((state) => state === "failed").length;
-  const blockedCount = stepStates.filter((state) => state === "blocked").length;
+  const pipelineProgress = resolutionProgress(stepStates);
+  const aiReviewComplete = [5, 6, 7].every((index) => stateFor(index) === "done");
 
   /**
    * Pill text for the two steps whose label describes a condition, not a state.
    */
   const startLabel = stateFor(5) === "ready" ? "Start here" : undefined;
   const judgeLabel = stateFor(7) === "done" ? "Advisory" : undefined;
-  const statusTone =
-    caseData.status === "Auto Resolved" ? "auto" : caseData.status === "Human Review" ? "review" : "neutral";
-
   const toggle = (index: number) => setOpenStep((current) => (current === index ? 0 : index));
 
   return (
@@ -430,22 +432,32 @@ export function CaseDetail({
           <p>{caseData.description}</p>
         </div>
         <div className="case-header-side">
-          <span className={`mode ${statusTone}`}>{caseData.status}</span>
-          <small>{labelize(caseData.disputeType)}</small>
+          <span className={`mode ${analysis ? "auto" : "neutral"}`}>
+            {deterministicResultLabel(analysis !== null)}
+          </span>
+          <span className={`mode ${aiReviewComplete ? "auto" : "neutral"}`}>
+            {aiReviewLabel(aiReviewComplete, resolutionRunning)}
+          </span>
+          <small>
+            Case disposition: {caseData.status} · {labelize(caseData.disputeType)}
+          </small>
         </div>
       </header>
 
       <section className="workflow-toolbar">
         <div className="workflow-toolbar-left">
-          <strong>Dispute workflow</strong>
+          <strong>Resolution pipeline</strong>
           <span className="workflow-progress">
-            <b>{doneCount}</b> of {TOTAL_STEPS} steps complete
-            {failedCount > 0 && (
-              <em className="workflow-flag failed">{failedCount} failed</em>
+            <b>{pipelineProgress.done}</b> of {pipelineProgress.total} steps complete
+            {pipelineProgress.failed > 0 && (
+              <em className="workflow-flag failed">{pipelineProgress.failed} failed</em>
             )}
-            {blockedCount > 0 && (
-              <em className="workflow-flag blocked">{blockedCount} blocked</em>
+            {pipelineProgress.blocked > 0 && (
+              <em className="workflow-flag blocked">{pipelineProgress.blocked} blocked</em>
             )}
+          </span>
+          <span className="workflow-progress">
+            AI Intake: <b>{intakeProgressLabel(intakeCase?.lifecycle)}</b>
           </span>
         </div>
         <div className="workflow-toolbar-actions">

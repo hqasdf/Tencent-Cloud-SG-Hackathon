@@ -72,12 +72,16 @@ FastAPI intake API
 ### Environment configuration
 
 ```text
-TENCENT_TOKENHUB_API_KEY=...
-TENCENT_TOKENHUB_BASE_URL=https://tokenhub-intl.tencentcloudmaas.com/plan/v3
-TENCENT_MODEL=hunyuan-turbos-latest
+AGENT_MODE=real
+AGENT_PROVIDER=gemini_native
+AGENT_MODEL=<model available to the account>
+AGENT_API_KEY=<server-side credential>
 ```
 
-The server must fail safely when the key is missing: it returns a readable `LLM_UNAVAILABLE` error and keeps the user's saved message. It must never put these values in a Vite environment variable or frontend source file.
+The server must fail safely when configuration is missing: it returns a safe
+`NOT_CONFIGURED` code and keeps the user's saved message. Provider failures use
+classified codes. Credentials must never enter a Vite environment variable or
+frontend source file.
 
 ## Persistence model
 

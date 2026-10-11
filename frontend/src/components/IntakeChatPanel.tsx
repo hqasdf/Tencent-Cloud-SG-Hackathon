@@ -28,9 +28,10 @@ interface PhoneProps {
   intakeCase: IntakeCase;
   onSend: (content: string) => void;
   loading: boolean;
+  disabled: boolean;
 }
 
-function PhoneMockup({ party, intakeCase, onSend, loading }: PhoneProps) {
+function PhoneMockup({ party, intakeCase, onSend, loading, disabled }: PhoneProps) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const messages = intakeCase.messages.filter((m) => m.party === party);
@@ -42,13 +43,16 @@ function PhoneMockup({ party, intakeCase, onSend, loading }: PhoneProps) {
 
   const submit = () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || disabled) return;
     onSend(text);
     setInput("");
   };
 
   const label = party === "rider" ? "Rider" : "Driver";
-  const isDisabled = loading || (state?.interviewComplete && party === "rider" && intakeCase.lifecycle !== "RIDER_REBUTTAL");
+  const allowed = (party === "rider" && (
+    intakeCase.lifecycle === "RIDER_INTERVIEW" || intakeCase.lifecycle === "RIDER_REBUTTAL"
+  )) || (party === "driver" && intakeCase.lifecycle === "DRIVER_INTERVIEW");
+  const isDisabled = loading || disabled || !allowed;
 
   return (
     <div className="phone-frame">
@@ -218,6 +222,7 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
             intakeCase={intakeCase}
             onSend={(c) => handleSend("rider", c)}
             loading={sending === "rider"}
+            disabled={sending !== null}
           />
         </div>
         <div className="phone-column">
@@ -226,6 +231,7 @@ export function IntakeChatPanel({ sourceCaseId, onLifecycleChange }: IntakeChatP
             intakeCase={intakeCase}
             onSend={(c) => handleSend("driver", c)}
             loading={sending === "driver"}
+            disabled={sending !== null}
           />
         </div>
       </section>

@@ -33,9 +33,33 @@ class IntakeMessage(IntakeModel):
 
 
 class PartyFact(IntakeModel):
+    id: str | None = None
     key: str
     value: str
     stated_by: Party = Field(serialization_alias="statedBy", validation_alias="statedBy")
+    source_message_id: str | None = Field(
+        default=None, serialization_alias="sourceMessageId", validation_alias="sourceMessageId"
+    )
+    verification_status: Literal["ALLEGED"] = Field(
+        default="ALLEGED",
+        serialization_alias="verificationStatus",
+        validation_alias="verificationStatus",
+    )
+    supersedes_fact_id: str | None = Field(
+        default=None, serialization_alias="supersedesFactId", validation_alias="supersedesFactId"
+    )
+    active: bool = True
+
+
+class IntakeFactCandidate(BaseModel):
+    """Untrusted model extraction; identity and provenance are added by the server."""
+
+    key: str = Field(min_length=1, max_length=120)
+    value: str = Field(min_length=1, max_length=1000)
+    operation: Literal["ADD", "CORRECT"] = "ADD"
+    corrects_fact_id: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class InterviewState(IntakeModel):
@@ -83,16 +107,34 @@ class SendMessageRequest(IntakeModel):
     content: str
 
 
-class HunyuanStructuredReply(BaseModel):
-    """Strict JSON schema that Hunyuan must return for each interview turn."""
+class IntakeStructuredReply(BaseModel):
+    """Strict, provider-neutral output contract for each intake turn."""
 
     assistant_message: str
     suggested_dispute_type: SuggestedDisputeType = Field(default="unknown")
-    party_facts: list[PartyFact] = Field(default_factory=list)
+    party_facts: list[IntakeFactCandidate] = Field(default_factory=list)
     missing_details: list[str] = Field(default_factory=list)
     interview_complete: bool = Field(default=False)
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
+
+
+class IntakeExecutionMetadata(IntakeModel):
+    provider: str
+    model: str | None = None
+    duration_ms: int = Field(serialization_alias="durationMs", validation_alias="durationMs")
+    input_tokens: int | None = Field(
+        default=None, serialization_alias="inputTokens", validation_alias="inputTokens"
+    )
+    output_tokens: int | None = Field(
+        default=None, serialization_alias="outputTokens", validation_alias="outputTokens"
+    )
+    total_tokens: int | None = Field(
+        default=None, serialization_alias="totalTokens", validation_alias="totalTokens"
+    )
+    attempt_count: int = Field(
+        default=1, serialization_alias="attemptCount", validation_alias="attemptCount"
+    )
 
 
 class SendMessageResponse(IntakeModel):
@@ -100,3 +142,4 @@ class SendMessageResponse(IntakeModel):
     assistant_message: IntakeMessage = Field(
         serialization_alias="assistantMessage", validation_alias="assistantMessage"
     )
+    execution: IntakeExecutionMetadata | None = None

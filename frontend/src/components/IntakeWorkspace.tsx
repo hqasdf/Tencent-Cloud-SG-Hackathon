@@ -30,9 +30,10 @@ interface PhoneProps {
   caseData: IntakeCase | null;
   onSend: (content: string) => void;
   loading: boolean;
+  disabled: boolean;
 }
 
-function PhoneMockup({ party, caseData, onSend, loading }: PhoneProps) {
+function PhoneMockup({ party, caseData, onSend, loading, disabled }: PhoneProps) {
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const messages = caseData?.messages?.filter((m) => m.party === party) ?? [];
@@ -44,12 +45,16 @@ function PhoneMockup({ party, caseData, onSend, loading }: PhoneProps) {
 
   const submit = () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || disabled) return;
     onSend(text);
     setInput("");
   };
 
   const label = party === "rider" ? "Rider" : "Driver";
+  const allowed = !!caseData && ((party === "rider" && (
+    caseData.lifecycle === "RIDER_INTERVIEW" || caseData.lifecycle === "RIDER_REBUTTAL"
+  )) || (party === "driver" && caseData.lifecycle === "DRIVER_INTERVIEW"));
+  const isDisabled = loading || disabled || !allowed;
 
   return (
     <div className="phone-frame">
@@ -73,16 +78,16 @@ function PhoneMockup({ party, caseData, onSend, loading }: PhoneProps) {
             placeholder={`Message as ${label.toLowerCase()}…`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-            disabled={loading}
+            disabled={isDisabled}
           />
-          <button onClick={submit} disabled={loading || !input.trim()}>Send</button>
+          <button onClick={submit} disabled={isDisabled || !input.trim()}>Send</button>
         </footer>
       </div>
     </div>
   );
 }
 
-interface FactListProps { facts: { key: string; value: string; statedBy: string }[]; missing: string[]; }
+interface FactListProps { facts: { key: string; value: string; statedBy: string; active?: boolean }[]; missing: string[]; }
 
 function FactList({ facts, missing }: FactListProps) {
   const safeFacts = facts ?? [];
@@ -92,8 +97,8 @@ function FactList({ facts, missing }: FactListProps) {
     <div className="fact-strip">
       {safeFacts.length > 0 && (
         <div className="fact-group">
-          <span className="eyebrow">Extracted facts</span>
-          {safeFacts.map((f, i) => <div className="fact-row" key={i}><code>{f.key}</code><span>{f.value}</span></div>)}
+          <span className="eyebrow">Party allegations</span>
+          {safeFacts.filter((f) => f.active !== false).map((f, i) => <div className="fact-row" key={i}><code>{f.key}</code><span>{f.value}</span></div>)}
         </div>
       )}
       {safeMissing.length > 0 && (
@@ -241,13 +246,13 @@ export function IntakeWorkspace() {
 
       <section className="phone-grid">
         <div className="phone-column">
-          <PhoneMockup party="rider" caseData={intakeCase} onSend={(c) => handleSend("rider", c)} loading={sending === "rider"} />
+          <PhoneMockup party="rider" caseData={intakeCase} onSend={(c) => handleSend("rider", c)} loading={sending === "rider"} disabled={sending !== null} />
           {intakeCase?.riderState && (
             <FactList facts={intakeCase.riderState.facts ?? []} missing={intakeCase.riderState.missingDetails ?? []} />
           )}
         </div>
         <div className="phone-column">
-          <PhoneMockup party="driver" caseData={intakeCase} onSend={(c) => handleSend("driver", c)} loading={sending === "driver"} />
+          <PhoneMockup party="driver" caseData={intakeCase} onSend={(c) => handleSend("driver", c)} loading={sending === "driver"} disabled={sending !== null} />
           {intakeCase?.driverState && (
             <FactList facts={intakeCase.driverState.facts ?? []} missing={intakeCase.driverState.missingDetails ?? []} />
           )}

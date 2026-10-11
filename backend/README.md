@@ -1,7 +1,7 @@
 # RydeResolve Case API
 
-FastAPI backend for RydeResolve. It owns the deterministic dispute engine and the
-Stage 4 Rider + Driver advocate agents.
+FastAPI backend for RydeResolve. It owns intake, the deterministic dispute engine,
+the Rider and Driver Advocates and Rebuttals, and the Judge pipeline.
 
 ## Architecture principle
 
@@ -63,11 +63,11 @@ Copy `.env.example` to `.env` and adjust. The defaults require no credentials.
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `AGENT_MODE` | `mock` | `mock` or `real`. |
-| `AGENT_PROVIDER` | `mock` | `mock` or `openai_compatible`. |
+| `AGENT_PROVIDER` | `mock` | `mock`, `gemini_native`, `openai_compatible`, or `tencent_tokenhub`. |
 | `AGENT_MODEL` | — | Required in real mode. |
 | `AGENT_BASE_URL` | — | OpenAI-compatible base URL; required in real mode. |
 | `AGENT_API_KEY` | — | Required in real mode. Never logged. |
-| `AGENT_TIMEOUT_SECONDS` | `20` | Per-request timeout. |
+| `AGENT_TIMEOUT_SECONDS` | `30` | Per-request timeout, capped at 30 seconds. |
 | `AGENT_TEMPERATURE` | `0.0` | Advocates should be deterministic, so this defaults to 0. |
 
 **Real mode fails loudly.** If `AGENT_MODE=real` is set without valid credentials,
@@ -85,6 +85,15 @@ real model produced it would destroy the audit value of the whole pipeline.
   Deliberately vendor-agnostic: nothing in the code assumes a specific vendor's
   endpoint or auth scheme. A provider with a genuinely different request shape
   belongs in its own module behind the same `LlmProvider` protocol.
+- **`gemini_native`** — the authoritative Google Gemini transport. It uses
+  Gemini's native structured-output schema and the shared `AGENT_API_KEY` and
+  `AGENT_MODEL` settings for intake and the resolution agents.
+- **`tencent_tokenhub`** — the shared OpenAI-compatible transport configured for
+  Tencent TokenHub.
+
+AI intake is unavailable in mock mode unless a controlled intake provider is
+injected by an offline test. Provider construction is lazy, so missing intake
+configuration does not stop FastAPI from starting.
 
 ## Stage 4 safety properties
 

@@ -1,5 +1,9 @@
 # Root-cause diagnosis: Gemini advocate calls failing with 503 / timeout
 
+> Historical report. Phase 1 later unified every AI role under `AGENT_API_KEY`,
+> `AGENT_MODEL`, the provider registry, and `GeminiNativeProvider`. References
+> below to a separate intake Gemini credential no longer describe active code.
+
 **Status:** `ROOT CAUSE IDENTIFIED — PROVIDER-SIDE QUOTA EXHAUSTION (429) WITH CAPACITY
 UNAVAILABILITY (503)`. No product code change is required to fix this, and no further
 live Stage 6 validation is justified until quota is restored.
@@ -120,7 +124,7 @@ proxying to Google's live service.
 | Does production code need changing? | **No** — no defect causes these failures. Items in §6 are optional improvements |
 | Should the timeout change? | **No.** `httpx.Client(timeout=60.0)` sets connect/read/write/pool to 60 s. A success was observed in 14 s; failures return in 0.7–3.7 s |
 | Should `response_format` / schema change? | **No.** Replication exonerated it, and the schema is not even transmitted |
-| Should the OpenAI-compatible endpoint be replaced? | **No.** It serves 200 OK successfully. The native path uses a *different* credential (`GEMINI_API_KEY`/`GOOGLE_API_KEY`, not `AGENT_API_KEY`), so switching would not address a quota limit |
+| Should the OpenAI-compatible endpoint be replaced? | Historical answer: no for that incident. Current code uses `GeminiNativeProvider` and the shared `AGENT_API_KEY` for native structured output. |
 | Is another full Stage 6 live validation justified yet? | **No.** It would burn quota and reproduce the same failure. Wait for quota to be restored |
 
 ---

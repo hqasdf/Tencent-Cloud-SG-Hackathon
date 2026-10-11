@@ -153,8 +153,12 @@ class IntakeAnalysisService:
 
 
 def _facts_to_dicts(facts: list[PartyFact]) -> list[dict]:
-    """Convert PartyFact objects to plain dicts for serialization."""
-    return [{"key": f.key, "value": f.value, "statedBy": f.stated_by} for f in facts]
+    """Expose only active, party-attributed allegations to the legacy response."""
+    return [
+        {"key": f.key, "value": f.value, "statedBy": f.stated_by}
+        for f in facts
+        if f.active
+    ]
 
 
 def _build_party_statements(
@@ -180,7 +184,7 @@ def _build_fact_map(state: object | None) -> dict[str, str]:
     """Map fact key → fact value for one party's interview state."""
     if state is None or not state.facts:
         return {}
-    return {f.key.lower(): f.value for f in state.facts}
+    return {f.key.lower(): f.value for f in state.facts if f.active}
 
 
 def _detect_contradictions(

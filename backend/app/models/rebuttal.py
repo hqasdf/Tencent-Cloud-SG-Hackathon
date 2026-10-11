@@ -35,7 +35,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.advocate import (
-    AdvocateClaim,
+    TrustedClaim,
     AssertedFact,
     PipelineStage,
     VerificationSummary,
@@ -152,7 +152,7 @@ class RebuttalCaseContext(RebuttalContextModel):
     policy_evaluation: ContextPolicyEvaluation = Field(
         serialization_alias="policyEvaluation", validation_alias="policyEvaluation"
     )
-    own_verified_claims: list[AdvocateClaim] = Field(
+    own_verified_claims: list[TrustedClaim] = Field(
         default_factory=list,
         serialization_alias="ownVerifiedClaims",
         validation_alias="ownVerifiedClaims",
@@ -161,7 +161,7 @@ class RebuttalCaseContext(RebuttalContextModel):
             "agent knows what it already argued and does not rebut itself."
         ),
     )
-    opposing_verified_claims: list[AdvocateClaim] = Field(
+    opposing_verified_claims: list[TrustedClaim] = Field(
         default_factory=list,
         serialization_alias="opposingVerifiedClaims",
         validation_alias="opposingVerifiedClaims",

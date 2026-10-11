@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Literal
 
-PROMPT_VERSION = "advocate_prompts_v2"
+PROMPT_VERSION = "advocate_prompts_v3_atomic_propositions"
 
 # Bounded defaults for a typed agent call.
 #
@@ -42,8 +42,7 @@ SUPPORTED_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
 # names are accepted ONLY as a fallback, and ONLY for the tencent_tokenhub
 # provider, so a developer who already exports a TokenHub key does not have to
 # duplicate it. This is an explicit, documented alias rather than a silent
-# borrow: no other provider picks these up, and the model is deliberately NOT
-# aliased because the intake pipeline uses TENCENT_MODEL for a different job.
+# borrow: no other provider picks these up, and AGENT_MODEL remains authoritative.
 TOKENHUB_API_KEY_ENV = "TENCENT_TOKENHUB_API_KEY"
 TOKENHUB_BASE_URL_ENV = "TENCENT_TOKENHUB_BASE_URL"
 

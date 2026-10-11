@@ -1,5 +1,6 @@
 import type { AdvocateClaim, AdvocateSideResult, PipelineStage, RejectedClaim, VerificationSummary } from "../types/advocate";
 import { humanize, labelize } from "../utils/format";
+import { namespaceClaimId } from "../utils/uiContracts";
 
 /**
  * The two advocates' arguments, as the case workflow renders them.
@@ -14,12 +15,12 @@ import { humanize, labelize } from "../utils/format";
  * what previously made the page ambiguous about which button to press.
  */
 
-function ClaimCard({ claim }: { claim: AdvocateClaim }) {
+function ClaimCard({ claim, side }: { claim: AdvocateClaim; side: string }) {
   return (
     <article className="claim">
       <div className="claim-top">
         <b className="verified">VERIFIED</b>
-        <code>{claim.claimId}</code>
+        <code>{namespaceClaimId(side, claim.claimId)}</code>
         <span className={`importance ${claim.importance.toLowerCase()}`}>{claim.importance}</span>
       </div>
       <p>{claim.claim}</p>
@@ -42,12 +43,12 @@ function ClaimCard({ claim }: { claim: AdvocateClaim }) {
   );
 }
 
-function RejectedCard({ claim }: { claim: RejectedClaim }) {
+function RejectedCard({ claim, side }: { claim: RejectedClaim; side: string }) {
   return (
     <article className="claim rejected-claim">
       <div className="claim-top">
         <b className="rejected">REJECTED BY VERIFIER</b>
-        <code>{claim.claimId}</code>
+        <code>{namespaceClaimId(side, claim.claimId)}</code>
       </div>
       <p>{claim.claim}</p>
       <small className="rejected">{claim.reason}</small>
@@ -99,7 +100,7 @@ function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
             <b>{side.requestedOutcome ? labelize(side.requestedOutcome) : "None"}</b>
             {side.contextAcknowledged && <small className="acknowledged">Context acknowledged</small>}
           </div>
-          {side.verifiedClaims.map((claim) => <ClaimCard claim={claim} key={claim.claimId} />)}
+          {side.verifiedClaims.map((claim) => <ClaimCard claim={claim} side={side.side} key={claim.claimId} />)}
           {side.rejectedClaims.length > 0 && (
             <div className="rejection-block">
               <span className="eyebrow">
@@ -109,7 +110,7 @@ function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
                 These assertions failed deterministic verification and were not used. They are shown
                 exactly as produced, for audit.
               </p>
-              {side.rejectedClaims.map((claim) => <RejectedCard claim={claim} key={claim.claimId} />)}
+              {side.rejectedClaims.map((claim) => <RejectedCard claim={claim} side={side.side} key={claim.claimId} />)}
             </div>
           )}
           {side.warnings.length > 0 && (
@@ -119,7 +120,7 @@ function AdvocatePanel({ side }: { side: AdvocateSideResult }) {
                 // example disputing two pieces of evidence), so the claim id and
                 // code alone are not unique. Include the index.
                 <small key={`${warning.claimId}-${warning.code}-${index}`}>
-                  {warning.claimId} · {labelize(warning.code)}: {warning.detail}
+                  {namespaceClaimId(side.side, warning.claimId)} · {labelize(warning.code)}: {warning.detail}
                 </small>
               ))}
             </div>

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 
 from app.agents.provider import AgentCompletionRequest, LlmCompletion
+from app.agents.semantic_registry import supporting_evidence_ids
+from app.models.advocate import ATOMIC_PROPOSITION_VERSION
 from app.models.agent import AgentCaseContext, NoShowFacts, RouteDeviationFacts
 from app.models.judge import JudgeCaseContext
 from app.models.rebuttal import RebuttalCaseContext
@@ -214,6 +216,39 @@ def _first_evidence(context: AgentCaseContext, *statuses: str) -> list[str]:
     return [item.id for item in context.evidence if item.status in wanted]
 
 
+def _with_atomic_propositions(payload: dict, context: AgentCaseContext) -> dict:
+    """Upgrade deterministic mock claims to the same v2 contract used live."""
+
+    payload["contractVersion"] = ATOMIC_PROPOSITION_VERSION
+    for claim in payload.get("claims", []):
+        propositions: list[dict] = []
+        declared = list(claim.get("evidenceIds", []))
+        for index, asserted in enumerate(claim.get("assertedFacts", []), start=1):
+            support = supporting_evidence_ids(context, asserted["fact"])
+            declared.extend(support)
+            propositions.append(
+                {
+                    "propositionId": f"{claim['claimId']}-F{index}",
+                    "kind": "FACT",
+                    "fact": asserted["fact"],
+                    "value": asserted["value"],
+                    "operator": "EQUALS",
+                    "evidenceIds": support,
+                }
+            )
+        propositions.append(
+            {
+                "propositionId": f"{claim['claimId']}-P1",
+                "kind": "ADVOCACY_POSITION",
+                "position": claim.get("reasoningSummary", "Advocate position"),
+                "evidenceIds": [],
+            }
+        )
+        claim["evidenceIds"] = list(dict.fromkeys(declared))
+        claim["propositions"] = propositions
+    return payload
+
+
 def _rider_output(context: AgentCaseContext) -> dict:
     facts = context.facts
     if isinstance(facts, RouteDeviationFacts):
@@ -328,13 +363,13 @@ def _rider_output(context: AgentCaseContext) -> dict:
         summary = (
             "The rider questions whether the arrival and waiting record justifies the charge."
         )
-    return {
+    return _with_atomic_propositions({
         "side": "RIDER",
         "summary": summary,
         "claims": claims,
         "requestedOutcome": outcome,
         "contextAcknowledged": True,
-    }
+    }, context)
 
 
 def _driver_output(context: AgentCaseContext) -> dict:
@@ -391,7 +426,7 @@ def _driver_output(context: AgentCaseContext) -> dict:
                     "disputedEvidenceIds": [],
                 }
             )
-        return {
+        return _with_atomic_propositions({
             "side": "DRIVER",
             "summary": (
                 f"The driver relies on {len(condition_types)} verified route condition(s) covering part of the deviation."
@@ -401,7 +436,7 @@ def _driver_output(context: AgentCaseContext) -> dict:
             "claims": claims,
             "requestedOutcome": "NO_REFUND" if condition_types else "HUMAN_REVIEW",
             "contextAcknowledged": True,
-        }
+        }, context)
 
     claims = [
         {
@@ -441,7 +476,7 @@ def _driver_output(context: AgentCaseContext) -> dict:
                 "disputedEvidenceIds": list(context.conflicting_evidence_ids),
             }
         )
-    return {
+    return _with_atomic_propositions({
         "side": "DRIVER",
         "summary": (
             "The driver relies on the recorded arrival inside the pickup radius and the waiting duration."
@@ -455,4 +490,4 @@ def _driver_output(context: AgentCaseContext) -> dict:
             else "HUMAN_REVIEW"
         ),
         "contextAcknowledged": True,
-    }
+    }, context)

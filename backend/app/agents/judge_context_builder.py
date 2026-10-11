@@ -34,7 +34,7 @@ from app.agents.context_builder import (
     ROUTE_RULE_DESCRIPTIONS,
     _conflicting_from_rules,
 )
-from app.models.advocate import AdvocateClaim, AdvocateSideResult
+from app.models.advocate import AdvocateSideResult, TrustedClaim
 from app.models.analysis import CaseAnalysisResponse
 from app.models.agent import (
     AgentCaseContext,
@@ -110,8 +110,16 @@ class JudgeContextBuilder:
         or labelled — it is never touched, so there is no code path by which a
         rejected claim could reach the Judge prompt.
         """
-        verified: list[AdvocateClaim] = [
-            claim.model_copy(update={"claim_id": namespace_claim_id(side, claim.claim_id)})
+        verified: list[TrustedClaim] = [
+            TrustedClaim(
+                claim_id=namespace_claim_id(side, claim.claim_id),
+                claim=claim.trusted_summary,
+                evidence_ids=list(claim.evidence_ids),
+                policy_refs=list(claim.policy_refs),
+                importance=claim.importance,
+                asserted_facts=list(claim.asserted_facts),
+                propositions=[item for item in claim.propositions if item.status == "VERIFIED"],
+            )
             for claim in result.verified_claims
         ]
         return JudgeSideClaims(

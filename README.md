@@ -60,30 +60,23 @@ In practice this means:
 
 ### First-time setup
 
-```bash
-# 1. Get a free Gemini API key at https://aistudio.google.com/app/apikey
-
-# 2. Create backend/.env with your key (gitignored, never committed)
-cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\backend"
-echo GEMINI_API_KEY=your_key_here > .env
-
-# 3. Install dependencies
-pip install -r requirements.txt
-cd ..\frontend
-npm install
-```
+Create a virtual environment, install the backend and frontend dependencies, and
+copy `backend/.env.example` to the gitignored `backend/.env`. For live Gemini use,
+set `AGENT_MODE=real`, `AGENT_PROVIDER=gemini_native`, `AGENT_MODEL`, and
+`AGENT_API_KEY`. Never commit the credential. Intake stays unavailable in mock mode;
+the deterministic product and offline agent tests remain usable.
 
 ### Run the backend (Terminal 1)
 
 ```bash
-cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\backend"
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+cd backend
+.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### Run the frontend (Terminal 2)
 
 ```bash
-cd "c:\Users\ephra\OneDrive\SP\TENCENT Hackathon\Tencent-Cloud-SG-Hackathon\frontend"
+cd frontend
 npm run dev
 ```
 
@@ -91,8 +84,9 @@ npm run dev
 
 Go to `http://localhost:5173`
 
-The Gemini API key is read from `backend/.env` (local dev) or the
-`GEMINI_API_KEY` environment variable (production). See
+All AI roles use the provider registry and the same `AGENT_*` configuration.
+`AGENT_API_KEY` is read from `backend/.env` locally or the server environment in
+production. See
 [`RUNNING.md`](./RUNNING.md) for troubleshooting and deployment notes.
 
 ## Tests

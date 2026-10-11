@@ -12,18 +12,18 @@ Covers:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
+from dataclasses import dataclass, field
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.data.cases import MOCK_CASES
-from app.llm.hunyuan_client import HunyuanResult
 from app.main import app
+from app.models.intake import IntakeExecutionMetadata, IntakeStructuredReply
 from app.repositories.intake_repository import IntakeCaseRepository
+from app.services.intake_provider import IntakeTurnResult
 
 
 @pytest.fixture()
@@ -36,26 +36,18 @@ def temp_db() -> Path:
 @pytest.fixture()
 def client(temp_db: Path):
     """Create a test client with a fresh SQLite DB and no real LLM key."""
-    old_key = os.environ.pop("TENCENT_TOKENHUB_API_KEY", None)
-    old_openai_key = os.environ.pop("OPENAI_API_KEY", None)
-    try:
-        from app.api import intake as intake_module
+    from app.api import intake as intake_module
 
-        repo = IntakeCaseRepository(db_path=temp_db)
-        from app.services.conversation_service import ConversationService
-        from app.services.intake_analysis_service import IntakeAnalysisService
+    repo = IntakeCaseRepository(db_path=temp_db)
+    from app.services.conversation_service import ConversationService
+    from app.services.intake_analysis_service import IntakeAnalysisService
 
-        intake_module._repository = repo
-        intake_module._conversation_service = ConversationService(repo)
-        intake_module._analysis_service = IntakeAnalysisService(repo)
+    intake_module._repository = repo
+    intake_module._conversation_service = ConversationService(repo)
+    intake_module._analysis_service = IntakeAnalysisService(repo)
 
-        with TestClient(app) as c:
-            yield c
-    finally:
-        if old_key is not None:
-            os.environ["TENCENT_TOKENHUB_API_KEY"] = old_key
-        if old_openai_key is not None:
-            os.environ["OPENAI_API_KEY"] = old_openai_key
+    with TestClient(app) as c:
+        yield c
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +138,7 @@ def test_send_message_llm_unavailable_returns_error_and_saves_message(
         json={"party": "rider", "content": "The driver never showed up."},
     )
     assert response.status_code == 503
-    assert "LLM_UNAVAILABLE" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "NOT_CONFIGURED"
 
     get_response = client.get(f"/api/intake/cases/{case_id}")
     messages = get_response.json()["messages"]
@@ -175,6 +167,22 @@ def test_send_message_to_nonexistent_case(client: TestClient):
     assert response.status_code == 404
 
 
+def test_wrong_party_api_response_is_safe_and_machine_readable(client: TestClient):
+    created = client.post("/api/intake/cases", json={"tripId": "TRIP-2026-09945"})
+    case_id = created.json()["id"]
+
+    response = client.post(
+        f"/api/intake/cases/{case_id}/messages",
+        json={"party": "driver", "content": "I should not be accepted yet."},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "code": "INTAKE_WRONG_PARTY",
+        "message": "Only the rider may send a message during RIDER_INTERVIEW.",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Mock LLM helpers
 # ---------------------------------------------------------------------------
@@ -198,11 +206,19 @@ def _mock_reply(
     )
 
 
-def _mock_hunyuan(reply_content: str):
-    mock = MagicMock()
-    mock.is_available = True
-    mock.chat.return_value = HunyuanResult(content=reply_content, ok=True)
-    return mock
+@dataclass
+class ControlledIntakeProvider:
+    reply_content: str
+    calls: list[dict] = field(default_factory=list)
+
+    def complete_turn(self, **kwargs):
+        self.calls.append(kwargs)
+        return IntakeTurnResult(
+            reply=IntakeStructuredReply.model_validate_json(self.reply_content),
+            execution=IntakeExecutionMetadata(
+                provider="controlled", model="offline", durationMs=1, attemptCount=1
+            ),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -216,11 +232,11 @@ def test_valid_structured_reply_persists_facts(client: TestClient):
 
     from app.api import intake as intake_module
 
-    intake_module._conversation_service._hunyuan = _mock_hunyuan(
+    intake_module._conversation_service._intake_provider = ControlledIntakeProvider(
         _mock_reply(
             assistant_message="I see. Can you tell me when you arrived at the pickup?",
             party_facts=[
-                {"key": "complaint", "value": "Driver never showed up", "stated_by": "rider"}
+                {"key": "complaint", "value": "Driver never showed up"}
             ],
         )
     )
@@ -248,8 +264,8 @@ def test_malformed_hunyuan_reply_gives_retry_and_no_extraction(client: TestClien
 
     from app.api import intake as intake_module
 
-    intake_module._conversation_service._hunyuan = _mock_hunyuan(
-        "This is not valid JSON at all."
+    intake_module._conversation_service._intake_provider = ControlledIntakeProvider(
+        _mock_reply(assistant_message="Please rephrase that.")
     )
 
     response = client.post(
@@ -279,11 +295,11 @@ def test_party_isolation_rider_messages_not_sent_to_driver(
     from app.api import intake as intake_module
 
     # Send a rider message
-    intake_module._conversation_service._hunyuan = _mock_hunyuan(
+    intake_module._conversation_service._intake_provider = ControlledIntakeProvider(
         _mock_reply(
             assistant_message="Got it. What time did you arrive?",
             party_facts=[
-                {"key": "no_show", "value": "Driver never showed", "stated_by": "rider"}
+                {"key": "no_show", "value": "Driver never showed"}
             ],
             interview_complete=True,
         )
@@ -294,24 +310,13 @@ def test_party_isolation_rider_messages_not_sent_to_driver(
     )
 
     # Now send a driver message — capture messages sent to the LLM
-    captured_messages = []
-
-    def capture_chat(messages):
-        captured_messages.extend(messages)
-        return HunyuanResult(
-            content=_mock_reply(
-                assistant_message="I see. What time did you arrive at the pickup?",
-                party_facts=[
-                    {"key": "arrival", "value": "Arrived at 08:43", "stated_by": "driver"}
-                ],
-            ),
-            ok=True,
+    mock_driver = ControlledIntakeProvider(
+        _mock_reply(
+            assistant_message="I see. What time did you arrive at the pickup?",
+            party_facts=[{"key": "arrival", "value": "Arrived at 08:43"}],
         )
-
-    mock_driver = MagicMock()
-    mock_driver.is_available = True
-    mock_driver.chat.side_effect = capture_chat
-    intake_module._conversation_service._hunyuan = mock_driver
+    )
+    intake_module._conversation_service._intake_provider = mock_driver
 
     client.post(
         f"/api/intake/cases/{case_id}/messages",
@@ -319,15 +324,13 @@ def test_party_isolation_rider_messages_not_sent_to_driver(
     )
 
     # The system prompt should mention "driver"
-    system_prompt = captured_messages[0].content if captured_messages else ""
+    system_prompt = mock_driver.calls[0]["system_prompt"] if mock_driver.calls else ""
     assert "driver" in system_prompt.lower()
 
     # Rider's private message content must NOT appear in driver's prompt
-    user_messages = [m for m in captured_messages if m.role == "user"]
-    for msg in user_messages:
-        assert "never showed up" not in msg.content.lower(), (
-            f"Rider's private message leaked to driver prompt: {msg.content}"
-        )
+    driver_prompt = mock_driver.calls[0]["user_prompt"]
+    assert "never showed up" not in driver_prompt.lower()
+    assert "driver never showed" not in system_prompt.lower()
 
 
 # ---------------------------------------------------------------------------

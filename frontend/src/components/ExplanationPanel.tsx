@@ -1,4 +1,5 @@
 import type { DecisionCounterfactual, DecisionExplanation } from "../types/rebuttal";
+import { counterfactualChangeLabel } from "../utils/uiContracts";
 import { labelize } from "../utils/format";
 
 /**
@@ -126,7 +127,7 @@ function WhatWouldChangeIt({ counterfactual }: { counterfactual: DecisionCounter
 
       <p className="judge-boundary-note">
         The Judge is never asked what would change its mind. Each threshold below is a policy
-        rule's own required value, and each direction is derived from how that rule is evaluated.
+        rule's own required value. The displayed movement includes whether equality satisfies the rule.
       </p>
 
       {counterfactual.thresholds.length > 0 ? (
@@ -136,7 +137,7 @@ function WhatWouldChangeIt({ counterfactual }: { counterfactual: DecisionCounter
               <div className="counterfactual-head">
                 <code>{item.fact}</code>
                 <span className={`direction direction-${item.direction.toLowerCase()}`}>
-                  {item.direction === "BELOW" ? "Would need to fall below" : "Would need to rise above"}
+                  {counterfactualChangeLabel(item.changeDirection)}
                 </span>
                 <b>{String(item.threshold)}</b>
               </div>

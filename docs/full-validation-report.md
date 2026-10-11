@@ -161,7 +161,9 @@ blocked — the harness, ledger and gate are ready and waiting.
 ### To resume live validation
 
 1. Rotate the key in Google AI Studio.
-2. Put the new value in `backend/.env` (`GEMINI_API_KEY`).
+2. Put the new value in `backend/.env` as `AGENT_API_KEY`, with
+   `AGENT_PROVIDER=gemini_native` and the intended `AGENT_MODEL`. This supersedes
+   the separate intake credential used when this historical report was written.
 3. **Restart the backend on port 8000** — the running process holds the old value in
    memory and will not pick up the new one.
 4. Tell me it is done; I will re-run the credential check (expect

@@ -16,10 +16,11 @@ actually reads and a threshold the policy actually sets. The second is a story,
 and a story cannot be evaluated — it would let the system appear to reason about
 possibilities it has no basis to consider.
 
-The direction of each counterfactual is derived from how the rule is evaluated,
-not chosen freely: a minimum-wait rule fails when the wait drops *below* its
-threshold, while a pickup-radius rule fails when the distance rises *above* it.
-Getting this backwards would produce a fluent, confident, and wrong explanation.
+The comparison and current result together determine the exact movement needed
+to flip a rule. A minimum-wait rule uses ``actual >= threshold``: a failing value
+must rise *to or above* the threshold, while a passing value must fall *below*
+it. A pickup-radius rule uses ``actual <= threshold`` and reverses those moves.
+Equality is therefore explicit rather than hidden inside a vague direction.
 """
 
 from __future__ import annotations
@@ -39,6 +40,14 @@ _DIRECTIONS: dict[str, Literal["BELOW", "ABOVE"]] = {
     "ROUTE_UNEXPLAINED_DEVIATION": "BELOW",
     "NO_SHOW_PICKUP_RADIUS": "ABOVE",
     "NO_SHOW_WAIT_TIME": "BELOW",
+}
+
+_COMPARISONS: dict[
+    str, Literal["GREATER_THAN_OR_EQUAL", "LESS_THAN_OR_EQUAL"]
+] = {
+    "ROUTE_UNEXPLAINED_DEVIATION": "GREATER_THAN_OR_EQUAL",
+    "NO_SHOW_PICKUP_RADIUS": "LESS_THAN_OR_EQUAL",
+    "NO_SHOW_WAIT_TIME": "GREATER_THAN_OR_EQUAL",
 }
 
 _NO_THRESHOLD_STATEMENT = (
@@ -75,8 +84,10 @@ class CounterfactualService:
         for rule in analysis.policy_evaluation.evaluated_rules:
             threshold_rule = THRESHOLD_RULES.get(rule.rule_id)
             direction = _DIRECTIONS.get(rule.rule_id)
-            if threshold_rule is None or direction is None:
+            comparison = _COMPARISONS.get(rule.rule_id)
+            if threshold_rule is None or direction is None or comparison is None:
                 continue
+            change_direction = _change_direction(comparison, rule.passed)
             thresholds.append(
                 CounterfactualThreshold(
                     rule_id=rule.rule_id,
@@ -84,12 +95,14 @@ class CounterfactualService:
                     actual_value=rule.actual_value,
                     threshold=rule.required_value,
                     direction=direction,
+                    comparison_operator=comparison,
+                    change_direction=change_direction,
                     passed=rule.passed,
                     statement=_statement(
                         fact=threshold_rule.fact,
                         actual=rule.actual_value,
                         threshold=rule.required_value,
-                        direction=direction,
+                        comparison=comparison,
                         passed=rule.passed,
                     ),
                 )
@@ -102,7 +115,7 @@ def _statement(
     fact: str,
     actual: object,
     threshold: object,
-    direction: str,
+    comparison: str,
     passed: bool,
 ) -> str:
     """One sentence naming the fact, its current value, and the policy threshold.
@@ -110,16 +123,39 @@ def _statement(
     Written from the rule's own numbers. ``passed`` changes only the framing, not
     the numbers, so a passing rule still reports the margin it passed by.
     """
-    comparison = "below" if direction == "BELOW" else "above"
     if passed:
+        failure_boundary = (
+            f"below {threshold}"
+            if comparison == "GREATER_THAN_OR_EQUAL"
+            else f"above {threshold}"
+        )
         return (
             f"{fact} is {actual}, which meets the policy threshold of {threshold}. "
-            f"Had it been {comparison} {threshold}, this rule would not have been met."
+            f"Had it been {failure_boundary}, this rule would not have been met."
         )
+    passing_boundary = (
+        f"at or above {threshold}"
+        if comparison == "GREATER_THAN_OR_EQUAL"
+        else f"at or below {threshold}"
+    )
     return (
         f"{fact} is {actual}, which does not meet the policy threshold of {threshold}. "
-        f"Had it been at or beyond {threshold}, this rule would have been met."
+        f"Had it been {passing_boundary}, this rule would have been met."
     )
+
+
+def _change_direction(
+    comparison: str, passed: bool
+) -> Literal[
+    "INCREASE_TO_OR_ABOVE",
+    "DECREASE_BELOW",
+    "DECREASE_TO_OR_BELOW",
+    "INCREASE_ABOVE",
+]:
+    """Return the inclusive/exclusive move that flips the current rule result."""
+    if comparison == "GREATER_THAN_OR_EQUAL":
+        return "DECREASE_BELOW" if passed else "INCREASE_TO_OR_ABOVE"
+    return "INCREASE_ABOVE" if passed else "DECREASE_TO_OR_BELOW"
 
 
 __all__ = ["CounterfactualService"]

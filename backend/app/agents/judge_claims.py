@@ -19,7 +19,7 @@ needed for display.
 
 from __future__ import annotations
 
-from app.models.advocate import AdvocateClaim
+from app.models.advocate import TrustedClaim
 from app.models.agent import AdvocateSide
 
 SEPARATOR = "-"
@@ -50,12 +50,12 @@ def split_claim_id(reference: str) -> tuple[str | None, str]:
     return None, reference
 
 
-def build_claim_index(claims: list[AdvocateClaim], side: AdvocateSide) -> dict[str, AdvocateClaim]:
+def build_claim_index(claims: list[TrustedClaim], side: AdvocateSide) -> dict[str, TrustedClaim]:
     """Map namespaced claim IDs to the verified claims they address."""
     return {namespace_claim_id(side, claim.claim_id): claim for claim in claims}
 
 
-def known_claim_ids(rider: list[AdvocateClaim], driver: list[AdvocateClaim]) -> dict[str, str]:
+def known_claim_ids(rider: list[TrustedClaim], driver: list[TrustedClaim]) -> dict[str, str]:
     """Namespaced ID -> owning side, for every verified claim on both sides."""
     index: dict[str, str] = {}
     for side, claims in (("RIDER", rider), ("DRIVER", driver)):

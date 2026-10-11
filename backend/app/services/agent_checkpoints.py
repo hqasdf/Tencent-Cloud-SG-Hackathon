@@ -95,7 +95,7 @@ class CheckpointSession:
         self.events: dict[str, str] = {}
         prompts = Path(__file__).resolve().parents[1] / "agents" / "prompts"
         self.identity = {
-            "version": 1, "analysis": analysis_hash,
+            "version": 2, "analysis": analysis_hash,
             "mode": settings.mode, "provider": provider, "configuredProvider": settings.provider,
             "model": settings.model, "endpointHash": hash_payload(settings.base_url),
             "temperature": settings.temperature, "maxTokens": settings.max_tokens,

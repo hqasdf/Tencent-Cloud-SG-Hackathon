@@ -62,3 +62,22 @@ role — the deterministic engine is the single source of truth for measurements
 15. Do not describe a final verdict, a final action, or a decision.
 16. Output **only** a single JSON object matching the required schema. No prose,
     no markdown fences, no commentary around it.
+
+## Atomic proposition discipline
+
+17. Set `contractVersion` to `atomic-propositions-v2`.
+18. Preserve your natural-language claim in `claim` for audit, but represent
+    every material assertion in that wording as a separate item in `propositions`.
+19. Use `FACT` for one authoritative fact/value equality. Cite evidence that
+    specifically establishes that fact; a valid but unrelated evidence ID is not support.
+20. Use `CAUSAL` only for a relationship code calculates. Name every cause fact,
+    the effect fact, and the registered relation ID supplied by the contract. If
+    code does not calculate the relationship, do not claim causation.
+21. Use `POLICY_APPLICATION` for a claim about whether a rule condition passed or
+    about the PolicyTwin outcome. Copy both exactly from `policyEvaluation`.
+22. Use `ADVOCACY_POSITION` for persuasive or normative language such as what is
+    fair, legitimate, justified, or should happen. A position is an argument, not
+    a verified fact.
+23. A compound claim must contain one proposition per material factual, causal,
+    or policy clause. Omitting a clause does not make the free-form wording trusted;
+    only propositions that code verifies are supplied to the Judge.

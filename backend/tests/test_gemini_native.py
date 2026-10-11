@@ -13,7 +13,8 @@ What is proven here:
 
   * the provider satisfies ``LlmProvider`` and nothing above it changed
   * the native request carries exactly the bounded contract: 30 s, 1024 output
-    tokens, temperature 0, thinking level low, non-streaming
+    tokens, Gemini-3.8-compatible sampling fields, thinking level low,
+    non-streaming
   * the response schema reaching the provider is generated from the Pydantic
     model — there is no hand-maintained schema document left to drift
   * system instruction and user content map to the native fields
@@ -51,10 +52,16 @@ from app.agents.provider import (
     ProviderErrorCode,
 )
 from app.agents.provider_schema import provider_schema_for
-from app.agents.providers.gemini_native import GeminiNativeProvider
+from app.agents.providers.gemini_native import (
+    GeminiNativeProvider,
+    gemini_response_json_schema,
+)
 from app.agents.providers.registry import SUPPORTED_PROVIDERS, get_provider
 from app.agents.rider_advocate import RiderAdvocateAgent
 from app.models.advocate import AdvocateOutput
+from app.models.intake import IntakeFactCandidate, IntakeStructuredReply
+from app.models.judge import JudgeOutput
+from app.models.rebuttal import RebuttalOutput
 from app.repositories.case_repository import MockCaseRepository
 from app.services.case_service import CaseService
 from app.services.dispute_analysis import DisputeAnalysisService
@@ -233,10 +240,42 @@ def test_the_native_config_carries_the_whole_bounded_contract() -> None:
     config = provider.build_config(_advocate_request())
     dumped = config.model_dump(exclude_none=True)
 
-    assert dumped["temperature"] == 0.0
+    assert "temperature" not in dumped
+    assert "top_p" not in dumped
+    assert "top_k" not in dumped
+    assert "candidate_count" not in dumped
     assert dumped["max_output_tokens"] == DEFAULT_MAX_TOKENS == 1024
     assert dumped["response_mime_type"] == "application/json"
+    assert "response_json_schema" in dumped
+    assert "response_schema" not in dumped
     assert dumped["thinking_config"]["thinking_level"].name == "LOW"
+
+
+def test_gemini_38_wire_config_uses_json_schema_and_omits_legacy_sampling_fields() -> None:
+    provider, _, _ = _provider()
+
+    wire = provider.build_config(_advocate_request()).model_dump(
+        by_alias=True, exclude_none=True, mode="json"
+    )
+
+    assert wire["responseMimeType"] == "application/json"
+    assert "responseJsonSchema" in wire
+    assert "responseSchema" not in wire
+    assert wire["thinkingConfig"]["thinkingLevel"] == "LOW"
+    for legacy in ("temperature", "topP", "topK", "candidateCount"):
+        assert legacy not in wire
+
+
+def test_non_38_models_keep_the_callers_temperature() -> None:
+    provider = GeminiNativeProvider(
+        model="gemini-2.5-flash",
+        api_key=SECRET,
+        client_factory=lambda **_kwargs: _StubClient(response=_Response()),
+    )
+
+    dumped = provider.build_config(_advocate_request()).model_dump(exclude_none=True)
+
+    assert dumped["temperature"] == 0.0
 
 
 def test_the_system_instruction_and_user_content_map_to_the_native_fields() -> None:
@@ -278,6 +317,7 @@ def test_no_response_schema_means_no_structured_output_is_claimed() -> None:
 
     assert "response_mime_type" not in config
     assert "response_schema" not in config
+    assert "response_json_schema" not in config
 
 
 # ---------------------------------------------------------------------------
@@ -290,9 +330,84 @@ def test_the_schema_reaching_the_provider_is_the_one_the_parser_enforces() -> No
 
     provider.complete(_advocate_request())
 
-    sent = stub.calls[0]["config"].model_dump(exclude_none=True)["response_schema"]
-    assert sent == provider_schema_for(AdvocateOutput)
+    sent = stub.calls[0]["config"].model_dump(exclude_none=True)["response_json_schema"]
+    assert sent == gemini_response_json_schema(provider_schema_for(AdvocateOutput))
     assert "claims" in sent["properties"]
+
+
+def test_gemini_schema_adapter_removes_only_unsupported_keywords_recursively() -> None:
+    schema = {
+        "type": "object",
+        "title": "Envelope",
+        "description": "Structured reply.",
+        "required": ["status", "item"],
+        "properties": {
+            "status": {
+                "type": "string",
+                "enum": ["ok", "failed"],
+                "minLength": 2,
+                "maxLength": 20,
+                "default": "ok",
+            },
+            "item": {"$ref": "#/$defs/Item"},
+        },
+        "$defs": {
+            "Item": {
+                "type": "object",
+                "required": ["value"],
+                "properties": {
+                    "value": {"type": "number", "minimum": 0, "exclusiveMaximum": 10}
+                },
+                "additionalProperties": False,
+            }
+        },
+    }
+
+    compatible = gemini_response_json_schema(schema)
+    rendered = json.dumps(compatible)
+
+    assert compatible["required"] == ["status", "item"]
+    assert compatible["properties"]["status"]["enum"] == ["ok", "failed"]
+    assert compatible["properties"]["item"]["$ref"] == "#/$defs/Item"
+    assert compatible["$defs"]["Item"]["properties"]["value"]["minimum"] == 0
+    assert compatible["$defs"]["Item"]["additionalProperties"] is False
+    for unsupported in ("minLength", "maxLength", "default", "exclusiveMaximum"):
+        assert unsupported not in rendered
+
+
+@pytest.mark.parametrize(
+    "model",
+    [IntakeStructuredReply, AdvocateOutput, RebuttalOutput, JudgeOutput],
+)
+def test_every_ai_role_schema_serializes_to_the_gemini_subset(model) -> None:
+    """Four contracts cover intake roles plus both sides of advocate/rebuttal and Judge."""
+    provider, _, _ = _provider()
+    request = _advocate_request(schema=provider_schema_for(model))
+
+    dumped = provider.build_config(request).model_dump(exclude_none=True)
+    schema = dumped["response_json_schema"]
+    rendered = json.dumps(schema)
+
+    assert schema["type"] == "object"
+    assert schema["required"]
+    for unsupported in ("minLength", "maxLength", "default"):
+        assert unsupported not in rendered
+
+
+def test_provider_schema_adaptation_does_not_weaken_python_validation() -> None:
+    gemini_response_json_schema(provider_schema_for(IntakeStructuredReply))
+
+    with pytest.raises(ValueError):
+        IntakeFactCandidate(key="", value="present")
+    with pytest.raises(ValueError):
+        IntakeFactCandidate(key="x", value="x" * 1001)
+    with pytest.raises(ValueError):
+        IntakeStructuredReply.model_validate(
+            {
+                "assistant_message": "ok",
+                "unexpected": "must still be rejected locally",
+            }
+        )
 
 
 def test_the_advocate_agent_derives_its_schema_from_the_model() -> None:
@@ -505,7 +620,7 @@ def _api_error(status: int, message: str = "upstream refused"):
 def test_http_failures_map_onto_the_shared_vocabulary(
     status, expected_code, expected_retryable
 ) -> None:
-    provider, _, _ = _provider(client=_StubClient(error=_api_error(status)))
+    provider, client, _ = _provider(client=_StubClient(error=_api_error(status)))
 
     with pytest.raises(LlmProviderError) as caught:
         provider.complete(_advocate_request())
@@ -513,6 +628,7 @@ def test_http_failures_map_onto_the_shared_vocabulary(
     assert caught.value.code == expected_code
     assert caught.value.retryable is expected_retryable
     assert caught.value.provider == "gemini_native"
+    assert len(client.calls) == 1
 
 
 def test_a_timeout_is_normalised() -> None:

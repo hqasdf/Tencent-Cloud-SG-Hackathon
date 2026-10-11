@@ -261,10 +261,27 @@ class IntakeCaseRepository:
 
     @staticmethod
     def _row_to_state(row: sqlite3.Row) -> InterviewState:
+        raw_facts = json.loads(row["facts"])
+        facts: list[PartyFact] = []
+        for index, raw_fact in enumerate(raw_facts):
+            # Older SQLite records contain only key/value/statedBy. Give those
+            # allegations a stable synthetic identity without rewriting the DB.
+            if not raw_fact.get("id"):
+                legacy_seed = "|".join(
+                    (
+                        row["intake_case_id"],
+                        row["party"],
+                        str(index),
+                        str(raw_fact.get("key", "")),
+                        str(raw_fact.get("value", "")),
+                    )
+                )
+                raw_fact = {**raw_fact, "id": f"LEGACY-{uuid.uuid5(uuid.NAMESPACE_URL, legacy_seed).hex[:12].upper()}"}
+            facts.append(PartyFact(**raw_fact))
         return InterviewState(
             intakeCaseId=row["intake_case_id"],
             party=row["party"],
-            facts=[PartyFact(**f) for f in json.loads(row["facts"])],
+            facts=facts,
             missingDetails=json.loads(row["missing_details"]),
             suggestedDisputeType=row["suggested_dispute_type"],
             interviewComplete=bool(row["interview_complete"]),

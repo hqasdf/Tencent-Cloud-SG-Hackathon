@@ -22,7 +22,7 @@ from app.agents.context_builder import (
     ROUTE_RULE_DESCRIPTIONS,
 )
 from app.agents.judge_claims import namespace_claim_id
-from app.models.advocate import AdvocateClaim, AdvocateSideResult
+from app.models.advocate import AdvocateSideResult, TrustedClaim
 from app.models.analysis import CaseAnalysisResponse
 from app.models.agent import (
     AdvocateSide,
@@ -76,13 +76,21 @@ class RebuttalContextBuilder:
         )
 
     @staticmethod
-    def _claims(side: AdvocateSide, result: AdvocateSideResult) -> list[AdvocateClaim]:
+    def _claims(side: AdvocateSide, result: AdvocateSideResult) -> list[TrustedClaim]:
         """Project one side's VERIFIED claims, with namespaced IDs.
 
         ``rejected_claims`` is not read at all. See the module docstring.
         """
         return [
-            claim.model_copy(update={"claim_id": namespace_claim_id(side, claim.claim_id)})
+            TrustedClaim(
+                claim_id=namespace_claim_id(side, claim.claim_id),
+                claim=claim.trusted_summary,
+                evidence_ids=list(claim.evidence_ids),
+                policy_refs=list(claim.policy_refs),
+                importance=claim.importance,
+                asserted_facts=list(claim.asserted_facts),
+                propositions=[item for item in claim.propositions if item.status == "VERIFIED"],
+            )
             for claim in result.verified_claims
         ]
 

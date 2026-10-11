@@ -20,9 +20,24 @@ export interface IntakeMessage {
 }
 
 export interface PartyFact {
+  id?: string | null;
   key: string;
   value: string;
   statedBy: Party;
+  sourceMessageId?: string | null;
+  verificationStatus?: "ALLEGED";
+  supersedesFactId?: string | null;
+  active?: boolean;
+}
+
+export interface IntakeExecutionMetadata {
+  provider: string;
+  model: string | null;
+  durationMs: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
+  attemptCount: number;
 }
 
 export interface InterviewState {
@@ -61,4 +76,5 @@ export interface SendMessageRequest {
 export interface SendMessageResponse {
   case: IntakeCase;
   assistantMessage: IntakeMessage;
+  execution?: IntakeExecutionMetadata | null;
 }

@@ -130,7 +130,14 @@ export interface DecisionCounterfactual {
     fact: string;
     actualValue: number | boolean | string;
     threshold: number | boolean | string;
+    /** Legacy direction in which the rule fails; retained for API compatibility. */
     direction: "BELOW" | "ABOVE";
+    comparisonOperator: "GREATER_THAN_OR_EQUAL" | "LESS_THAN_OR_EQUAL";
+    changeDirection:
+      | "INCREASE_TO_OR_ABOVE"
+      | "DECREASE_BELOW"
+      | "DECREASE_TO_OR_BELOW"
+      | "INCREASE_ABOVE";
     passed: boolean;
     statement: string;
   }[];

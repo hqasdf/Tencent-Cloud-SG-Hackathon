@@ -12,7 +12,7 @@ capacity: it is that endpoint's structured-output path.
 
 This provider therefore takes structured output off that endpoint entirely. It
 calls ``generateContent`` directly and expresses the schema through Gemini's
-native mechanism (``response_mime_type`` + ``response_schema``) instead of
+native mechanism (``response_mime_type`` + ``response_json_schema``) instead of
 OpenAI's ``response_format``.
 
 What it deliberately does not do
@@ -59,6 +59,40 @@ _FINISH_REASON_ALIASES = {
 # guessed at.
 _THINKING_LEVELS = frozenset({"low", "medium", "high"})
 
+# Gemini accepts a documented subset of JSON Schema for native structured
+# output. Pydantic remains the authoritative local validator; this allow-list is
+# only a transport adapter that prevents unsupported annotations and constraints
+# (for example ``default`` and ``minLength``) from making the provider reject an
+# otherwise valid request.
+_GEMINI_JSON_SCHEMA_KEYWORDS = frozenset(
+    {
+        "$id",
+        "$defs",
+        "$ref",
+        "$anchor",
+        "type",
+        "format",
+        "title",
+        "description",
+        "enum",
+        "items",
+        "prefixItems",
+        "minItems",
+        "maxItems",
+        "minimum",
+        "maximum",
+        "anyOf",
+        "oneOf",
+        "properties",
+        "additionalProperties",
+        "required",
+        "propertyOrdering",
+    }
+)
+
+_GEMINI_SCHEMA_MAP_KEYWORDS = frozenset({"properties", "$defs"})
+_GEMINI_SCHEMA_LIST_KEYWORDS = frozenset({"prefixItems", "anyOf", "oneOf"})
+
 _RETRYABLE_CODES = frozenset(
     {
         ProviderErrorCode.RATE_LIMITED,
@@ -86,6 +120,59 @@ def _default_client_factory(*, api_key: str, timeout_seconds: float) -> Any:
             retry_options=types.HttpRetryOptions(attempts=1),
         ),
     )
+
+
+def gemini_response_json_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return the documented Gemini JSON Schema subset for structured output.
+
+    This transformation intentionally affects only the schema sent to Gemini.
+    The original Pydantic model and the full provider-neutral schema remain
+    unchanged and still validate the response after generation.
+    """
+    if not isinstance(schema, dict):
+        raise TypeError("Gemini response schema must be an object")
+    return _gemini_schema_node(schema)
+
+
+def _gemini_schema_node(node: Any) -> Any:
+    if isinstance(node, list):
+        return [_gemini_schema_node(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+
+    compatible: dict[str, Any] = {}
+    for keyword, value in node.items():
+        if keyword not in _GEMINI_JSON_SCHEMA_KEYWORDS:
+            continue
+        if keyword in _GEMINI_SCHEMA_MAP_KEYWORDS:
+            if isinstance(value, dict):
+                compatible[keyword] = {
+                    name: _gemini_schema_node(child)
+                    for name, child in value.items()
+                    if isinstance(child, (dict, bool))
+                }
+            continue
+        if keyword in _GEMINI_SCHEMA_LIST_KEYWORDS:
+            if isinstance(value, list):
+                compatible[keyword] = [_gemini_schema_node(child) for child in value]
+            continue
+        if keyword == "items":
+            if isinstance(value, (dict, bool)):
+                compatible[keyword] = _gemini_schema_node(value)
+            continue
+        if keyword == "additionalProperties" and isinstance(value, dict):
+            compatible[keyword] = _gemini_schema_node(value)
+            continue
+        compatible[keyword] = value
+    return compatible
+
+
+def _uses_gemini_38_generation_config(model: str) -> bool:
+    """Whether ``model`` follows Gemini 3.8's reduced generation config."""
+    normalised = model.strip().lower()
+    if normalised.startswith("models/"):
+        normalised = normalised.removeprefix("models/")
+    return normalised == "gemini-3.8-flash" or normalised.startswith("gemini-3.8-flash-")
 
 
 class GeminiNativeProvider:
@@ -143,20 +230,30 @@ class GeminiNativeProvider:
         """The native request configuration. Public so a test can inspect it.
 
         This is where the whole provider contract is visible: system
-        instruction, temperature, the output budget, the native structured-output
-        pair, and the thinking level. Everything comes from the request, so the
-        agent remains the single place that decides *what* to ask.
+        instruction, model-compatible sampling fields, the output budget, the
+        native structured-output pair, and the thinking level. Everything comes
+        from the request, so the agent remains the single place that decides
+        *what* to ask.
         """
         from google.genai import types
 
+        response_schema = (
+            gemini_response_json_schema(request.response_schema)
+            if request.response_schema
+            else None
+        )
         return types.GenerateContentConfig(
             system_instruction=request.system_prompt or None,
-            temperature=request.temperature,
+            # Gemini 3.8 rejects the legacy sampling controls. Keep them for
+            # other Gemini models, where callers still own the sampling policy.
+            temperature=(
+                None if _uses_gemini_38_generation_config(self._model) else request.temperature
+            ),
             max_output_tokens=request.max_tokens,
             # The native structured-output pair. This is the mechanism the
             # OpenAI-compatible endpoint could not serve.
-            response_mime_type="application/json" if request.response_schema else None,
-            response_schema=request.response_schema,
+            response_mime_type="application/json" if response_schema else None,
+            response_json_schema=response_schema,
             thinking_config=self._thinking_config(request),
         )
 

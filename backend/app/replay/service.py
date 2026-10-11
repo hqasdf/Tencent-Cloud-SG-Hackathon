@@ -80,6 +80,7 @@ from app.replay.versions import (
     ADVOCATE_SCHEMA_VERSION,
     JUDGE_SCHEMA_VERSION,
     REBUTTAL_SCHEMA_VERSION,
+    LEGACY_ADVOCATE_SCHEMA_VERSION,
     REPLAY_FORMAT_VERSION,
 )
 from app.services.audit import (
@@ -322,7 +323,7 @@ class ReplayService:
                 [claim.claim_id for claim in outcome.verified_claims],
                 [(claim.claim_id, claim.reason) for claim in outcome.rejected_claims],
             )
-            if not stored.captured_verification.matches(
+            if artifact.schema_version != LEGACY_ADVOCATE_SCHEMA_VERSION and not stored.captured_verification.matches(
                 fingerprint.verified_signatures,
                 [(item.item_id, item.reason) for item in fingerprint.rejected],
             ):

@@ -15,8 +15,11 @@ from __future__ import annotations
 REPLAY_FORMAT_VERSION = "1"
 """Version of the envelope and storage layout."""
 
-ADVOCATE_SCHEMA_VERSION = "stage4-v1"
+ADVOCATE_SCHEMA_VERSION = "stage4-v2-atomic-propositions"
 """Version of the stored advocate payload (Stage 4's ``AdvocateOutput``)."""
+
+LEGACY_ADVOCATE_SCHEMA_VERSION = "stage4-v1"
+"""Readable historical Advocate payload; claims are structural-only on replay."""
 
 REBUTTAL_SCHEMA_VERSION = "stage6-v1"
 """Version of the stored rebuttal payload (Stage 6's ``RebuttalOutput``)."""
@@ -33,11 +36,19 @@ STAGE_SCHEMA_VERSIONS: dict[str, str] = {
     "JUDGE": JUDGE_SCHEMA_VERSION,
 }
 
+SUPPORTED_STAGE_SCHEMA_VERSIONS: dict[str, frozenset[str]] = {
+    "ADVOCATES": frozenset({ADVOCATE_SCHEMA_VERSION, LEGACY_ADVOCATE_SCHEMA_VERSION}),
+    "REBUTTALS": frozenset({REBUTTAL_SCHEMA_VERSION}),
+    "JUDGE": frozenset({JUDGE_SCHEMA_VERSION}),
+}
+
 __all__ = [
     "ADVOCATE_SCHEMA_VERSION",
     "JUDGE_SCHEMA_VERSION",
+    "LEGACY_ADVOCATE_SCHEMA_VERSION",
     "REBUTTAL_SCHEMA_VERSION",
     "REPLAY_FORMAT_VERSION",
     "STAGE_SCHEMA_VERSIONS",
+    "SUPPORTED_STAGE_SCHEMA_VERSIONS",
     "SUPPORTED_REPLAY_VERSIONS",
 ]

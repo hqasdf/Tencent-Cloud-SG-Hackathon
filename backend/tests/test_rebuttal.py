@@ -57,6 +57,7 @@ from app.models.rebuttal import (
     RebuttalOutput,
 )
 from app.services.dispute_analysis import DisputeAnalysisService
+from app.services.counterfactual import _change_direction, _statement
 from app.services.resolution_orchestrator import ResolutionOrchestratorService
 
 ROUTE_CASE = "DISP-005"
@@ -1025,18 +1026,87 @@ def test_counterfactual_thresholds_come_from_policy_evaluation() -> None:
     assert result.counterfactual.generated_by == "DETERMINISTIC_ENGINE"
 
 
-def test_counterfactual_directions_match_how_each_rule_is_evaluated() -> None:
+def test_counterfactual_contract_states_comparison_and_exact_change_direction() -> None:
     no_show = _run(NO_SHOW_CASE, _StubProvider())
-    directions = {item.rule_id: item.direction for item in no_show.counterfactual.thresholds}
+    thresholds = {item.rule_id: item for item in no_show.counterfactual.thresholds}
 
-    # A minimum-wait rule fails when the wait falls below its threshold.
-    assert directions["NO_SHOW_WAIT_TIME"] == "BELOW"
-    # A pickup-radius rule fails when the distance rises above its threshold.
-    assert directions["NO_SHOW_PICKUP_RADIUS"] == "ABOVE"
+    wait = thresholds["NO_SHOW_WAIT_TIME"]
+    assert wait.comparison_operator == "GREATER_THAN_OR_EQUAL"
+    assert wait.direction == "BELOW"  # legacy rule-failure direction
+    assert wait.change_direction == (
+        "DECREASE_BELOW" if wait.passed else "INCREASE_TO_OR_ABOVE"
+    )
+
+    radius = thresholds["NO_SHOW_PICKUP_RADIUS"]
+    assert radius.comparison_operator == "LESS_THAN_OR_EQUAL"
+    assert radius.direction == "ABOVE"  # legacy rule-failure direction
+    assert radius.change_direction == (
+        "INCREASE_ABOVE" if radius.passed else "DECREASE_TO_OR_BELOW"
+    )
 
     route = _run(ROUTE_CASE, _StubProvider())
-    route_directions = {item.rule_id: item.direction for item in route.counterfactual.thresholds}
-    assert route_directions["ROUTE_UNEXPLAINED_DEVIATION"] == "BELOW"
+    route_threshold = {
+        item.rule_id: item for item in route.counterfactual.thresholds
+    }["ROUTE_UNEXPLAINED_DEVIATION"]
+    assert route_threshold.comparison_operator == "GREATER_THAN_OR_EQUAL"
+    assert route_threshold.change_direction == (
+        "DECREASE_BELOW"
+        if route_threshold.passed
+        else "INCREASE_TO_OR_ABOVE"
+    )
+    serialized = route_threshold.model_dump(by_alias=True)
+    assert serialized["comparisonOperator"] == "GREATER_THAN_OR_EQUAL"
+    assert serialized["changeDirection"] == route_threshold.change_direction
+
+
+@pytest.mark.parametrize(
+    ("actual", "passed", "expected_change", "expected_phrase"),
+    [
+        (0.10, False, "INCREASE_TO_OR_ABOVE", "at or above 0.25"),
+        (0.25, True, "DECREASE_BELOW", "below 0.25"),
+        (0.40, True, "DECREASE_BELOW", "below 0.25"),
+    ],
+)
+def test_at_least_counterfactual_is_correct_below_equal_and_above_threshold(
+    actual: float,
+    passed: bool,
+    expected_change: str,
+    expected_phrase: str,
+) -> None:
+    assert _change_direction("GREATER_THAN_OR_EQUAL", passed) == expected_change
+    statement = _statement(
+        fact="UNEXPLAINED_DEVIATION_KM",
+        actual=actual,
+        threshold=0.25,
+        comparison="GREATER_THAN_OR_EQUAL",
+        passed=passed,
+    )
+    assert expected_phrase in statement
+
+
+@pytest.mark.parametrize(
+    ("actual", "passed", "expected_change", "expected_phrase"),
+    [
+        (40, True, "INCREASE_ABOVE", "above 50"),
+        (50, True, "INCREASE_ABOVE", "above 50"),
+        (60, False, "DECREASE_TO_OR_BELOW", "at or below 50"),
+    ],
+)
+def test_at_most_counterfactual_is_correct_below_equal_and_above_threshold(
+    actual: int,
+    passed: bool,
+    expected_change: str,
+    expected_phrase: str,
+) -> None:
+    assert _change_direction("LESS_THAN_OR_EQUAL", passed) == expected_change
+    statement = _statement(
+        fact="DRIVER_PICKUP_DISTANCE_METERS",
+        actual=actual,
+        threshold=50,
+        comparison="LESS_THAN_OR_EQUAL",
+        passed=passed,
+    )
+    assert expected_phrase in statement
 
 
 def test_explanation_reports_the_deterministic_action_and_basis() -> None:

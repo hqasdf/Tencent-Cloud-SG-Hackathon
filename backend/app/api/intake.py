@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import ValidationError
-
 from app.data.trip_mapping import KNOWN_TRIP_IDS, get_source_case, get_source_case_by_case_id, get_source_case_id
-from app.llm.hunyuan_client import HunyuanUnavailableError
 from app.models.analysis import CaseAnalysisResponse
 from app.models.intake import (
     CreateIntakeCaseRequest,
@@ -13,8 +10,9 @@ from app.models.intake import (
     SendMessageResponse,
 )
 from app.repositories.intake_repository import IntakeCaseRepository
-from app.services.conversation_service import ConversationService
+from app.services.conversation_service import ConversationService, IntakeTransitionError
 from app.services.intake_analysis_service import IntakeAnalysisError, IntakeAnalysisService
+from app.services.intake_provider import IntakeProviderError
 
 router = APIRouter(prefix="/api/intake", tags=["intake"])
 
@@ -47,7 +45,7 @@ def create_intake_case(request: CreateIntakeCaseRequest) -> IntakeCase:
 def send_message(intake_case_id: str, request: SendMessageRequest) -> SendMessageResponse:
     """Add one party message and run one LLM interview turn."""
     try:
-        case, assistant_msg = _conversation_service.send_message(
+        case, assistant_msg, execution = _conversation_service.send_message(
             intake_case_id=intake_case_id,
             party=request.party,
             content=request.content,
@@ -57,17 +55,22 @@ def send_message(intake_case_id: str, request: SendMessageRequest) -> SendMessag
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(error),
         ) from error
+    except IntakeTransitionError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": error.code, "message": str(error)},
+        ) from error
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            detail={"code": "INTAKE_INVALID_REQUEST", "message": str(error)},
         ) from error
-    except HunyuanUnavailableError as error:
+    except IntakeProviderError as error:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"LLM_UNAVAILABLE: {error.args[0] if error.args else str(error)}",
+            status_code=error.status_code,
+            detail={"code": error.code, "message": str(error)},
         ) from error
-    return SendMessageResponse(case=case, assistant_message=assistant_msg)
+    return SendMessageResponse(case=case, assistant_message=assistant_msg, execution=execution)
 
 
 @router.get("/cases/{intake_case_id}", response_model=IntakeCase)
@@ -131,10 +134,10 @@ def skip_rebuttal(intake_case_id: str) -> IntakeCase:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(error),
         ) from error
-    except ValueError as error:
+    except IntakeTransitionError as error:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": error.code, "message": str(error)},
         ) from error
 
 

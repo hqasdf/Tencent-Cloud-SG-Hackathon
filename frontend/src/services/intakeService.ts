@@ -11,7 +11,7 @@ import type {
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export class IntakeApiError extends Error {
-  constructor(message: string, public readonly status?: number) {
+  constructor(message: string, public readonly status?: number, public readonly code?: string) {
     super(message);
     this.name = "IntakeApiError";
   }
@@ -28,8 +28,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new IntakeApiError("Could not reach the intake API.");
   }
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new IntakeApiError(body?.detail ?? `Intake API returned ${response.status}.`, response.status);
+    const body = await response.json().catch(() => null) as {
+      detail?: string | { code?: string; message?: string };
+    } | null;
+    const detail = body?.detail;
+    const message = typeof detail === "string"
+      ? detail
+      : detail?.message ?? `Intake API returned ${response.status}.`;
+    const code = typeof detail === "object" ? detail?.code : undefined;
+    throw new IntakeApiError(message, response.status, code);
   }
   return response.json() as Promise<T>;
 }
