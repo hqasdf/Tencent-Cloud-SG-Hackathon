@@ -17,40 +17,40 @@ def context_for(case_id: str):
 
 
 def test_route_case_exposes_correct_trusted_facts() -> None:
-    context, _, _ = context_for("CASE-2026-1041")
+    context, _, _ = context_for("DISP-007")
     facts = context.facts
     assert isinstance(facts, RouteDeviationFacts)
-    assert facts.expected_route_distance_km == 5.8
-    assert facts.actual_route_distance_km == 7.1
-    assert facts.distance_difference_km == 1.3
-    assert facts.deviation_percentage == 22.41
+    assert facts.expected_route_distance_km == 20.1
+    assert facts.actual_route_distance_km == 21.8
+    assert facts.distance_difference_km == 1.7
+    assert facts.deviation_percentage == 8.46
     assert facts.duration_difference_minutes == 8
-    assert facts.fare_difference == 2.3
-    assert facts.explained_deviation_distance_km == 0.5
-    assert facts.unexplained_deviation_distance_km == 0.8
+    assert facts.fare_difference == 8.5
+    assert facts.explained_deviation_distance_km == 0.0
+    assert facts.unexplained_deviation_distance_km == 1.7
 
 
 def test_route_case_exposes_only_verified_conditions_and_supporting_evidence() -> None:
-    context, _, _ = context_for("CASE-2026-1041")
+    context, _, _ = context_for("DISP-005")
     facts = context.facts
-    assert [condition.type for condition in facts.verified_conditions] == ["traffic_diversion"]
+    assert [condition.type for condition in facts.verified_conditions] == ["road_closure"]
     assert facts.verified_conditions[0].evidence_ids == ["E06"]
     assert set(facts.supporting_evidence_ids) <= {item.id for item in context.evidence}
 
 
 def test_no_show_case_exposes_correct_trusted_facts() -> None:
-    context, _, _ = context_for("CASE-2026-1043")
+    context, _, _ = context_for("DISP-002")
     facts = context.facts
     assert isinstance(facts, NoShowFacts)
     assert facts.driver_within_pickup_radius is True
     assert facts.driver_distance_to_pickup_meters < 100
-    assert facts.waiting_duration_seconds == 372
-    assert facts.cancellation_charge_amount == 6.0
-    assert facts.driver_message_evidence_ids == ["E06"]
+    assert facts.waiting_duration_seconds == 480
+    assert facts.cancellation_charge_amount == 5.0
+    assert facts.driver_message_evidence_ids == ["E04"]
 
 
 def test_context_contains_evidence_and_canonical_timeline() -> None:
-    context, case, _ = context_for("CASE-2026-1041")
+    context, case, _ = context_for("DISP-007")
     assert [item.id for item in context.evidence] == [item.id for item in case.evidence]
     assert all(item.status for item in context.evidence)
     timestamps = [event.timestamp for event in context.timeline]
@@ -58,7 +58,7 @@ def test_context_contains_evidence_and_canonical_timeline() -> None:
 
 
 def test_context_contains_the_correct_policy_and_rules() -> None:
-    route_context, _, _ = context_for("CASE-2026-1041")
+    route_context, _, _ = context_for("DISP-007")
     assert route_context.policy.policy_id == "ROUTE_DEVIATION_POLICY_V1"
     assert route_context.policy.dispute_type == "route_deviation"
     assert {rule.rule_id for rule in route_context.policy.rules} == {
@@ -67,7 +67,7 @@ def test_context_contains_the_correct_policy_and_rules() -> None:
         "ROUTE_EVIDENCE_CONSISTENCY",
     }
 
-    no_show_context, _, _ = context_for("CASE-2026-1043")
+    no_show_context, _, _ = context_for("DISP-002")
     assert no_show_context.policy.policy_id == "NO_SHOW_POLICY_V1"
     assert {rule.rule_id for rule in no_show_context.policy.rules} == {
         "NO_SHOW_REQUIRED_EVIDENCE",
@@ -78,7 +78,7 @@ def test_context_contains_the_correct_policy_and_rules() -> None:
 
 
 def test_context_carries_policy_evaluation_rule_results() -> None:
-    context, _, analysis = context_for("CASE-2026-1041")
+    context, _, analysis = context_for("DISP-007")
     assert context.policy_evaluation.policy_id == analysis.policy_evaluation.policy_id
     assert context.policy_evaluation.overall_outcome == analysis.policy_evaluation.overall_outcome
     assert len(context.policy_evaluation.evaluated_rules) == len(
@@ -87,11 +87,11 @@ def test_context_carries_policy_evaluation_rule_results() -> None:
 
 
 def test_context_flags_missing_and_conflicting_evidence() -> None:
-    clean, _, _ = context_for("CASE-2026-1041")
+    clean, _, _ = context_for("DISP-007")
     assert clean.missing_evidence_ids == []
     assert clean.conflicting_evidence_ids == []
 
-    conflicted, _, _ = context_for("CASE-2026-1044")
+    conflicted, _, _ = context_for("DISP-006")
     assert conflicted.conflicting_evidence_ids
 
 
@@ -108,7 +108,7 @@ def test_context_does_not_leak_the_recommendation_or_any_answer() -> None:
     so this test asserts on the *structured fields* rather than doing a broad
     substring scan over the serialized context.
     """
-    for case_id in ("CASE-2026-1041", "CASE-2026-1043", "CASE-2026-1044"):
+    for case_id in ("DISP-007", "DISP-002", "DISP-006"):
         context, _, analysis = context_for(case_id)
         serialized = context.model_dump_json(by_alias=True)
         payload = context.model_dump()
@@ -185,7 +185,7 @@ def _all_keys(value: object) -> set[str]:
 
 
 def test_context_has_no_recommendation_confidence_or_escalation_fields() -> None:
-    context, _, _ = context_for("CASE-2026-1041")
+    context, _, _ = context_for("DISP-007")
     fields = set(context.model_dump().keys())
     for forbidden in (
         "resolution_recommendation",
@@ -201,7 +201,7 @@ def test_context_has_no_recommendation_confidence_or_escalation_fields() -> None
 
 
 def test_context_never_exposes_the_raw_calculation_input() -> None:
-    context, case, _ = context_for("CASE-2026-1041")
+    context, case, _ = context_for("DISP-007")
     # The case still holds its internal input, but the context does not.
     assert case.analysis_input is not None
     assert "routeDeviation" not in context.model_dump_json(by_alias=True)
@@ -209,7 +209,7 @@ def test_context_never_exposes_the_raw_calculation_input() -> None:
 
 
 def test_context_excludes_historical_and_fairness_sensitive_data() -> None:
-    context, _, _ = context_for("CASE-2026-1041")
+    context, _, _ = context_for("DISP-007")
     serialized = context.model_dump_json(by_alias=True).lower()
     for forbidden in ("rating", "history", "historical", "fraud", "previous", "reputation"):
         assert forbidden not in serialized, f"Context leaked fairness-sensitive term {forbidden!r}"

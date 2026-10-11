@@ -61,7 +61,7 @@ class BrokenProvider:
         raise LlmProviderError("upstream exploded", provider=self.name)
 
 
-def context_for(case_id: str = "CASE-2026-1041"):
+def context_for(case_id: str = "DISP-007"):
     case = next(item for item in MOCK_CASES if item.id == case_id)
     analysis = DisputeAnalysisService().analyze(case)
     return AdvocateContextBuilder().build(case, analysis)
@@ -153,8 +153,9 @@ def test_system_prompt_contains_common_rules_side_role_and_output_schema() -> No
     RiderAdvocateAgent(provider).argue(context_for())
     system = provider.requests[0].system_prompt
     # Shared invariants, side role, and the machine-readable schema.
-    assert "# Required output schema" in system
-    assert "assertedFacts" in system
+    assert "contractVersion" in system
+    assert "atomic-propositions-v2" in system
+    assert "assertedFacts" in provider.requests[0].response_schema["properties"]["claims"]["items"]["properties"]
     assert "requestedOutcome" in system
 
 
@@ -234,7 +235,7 @@ def test_prompt_files_exist_and_are_non_trivial() -> None:
         assert len(path.read_text(encoding="utf-8").strip()) > 200, f"{name} is too thin"
 
 
-def test_output_schema_omits_position_as_a_property() -> None:
+def test_output_schema_scopes_position_to_advocacy_propositions() -> None:
     """`position` must not exist as a SCHEMA FIELD.
 
     The word may legitimately appear inside a human-readable description (e.g.
@@ -263,7 +264,10 @@ def test_output_schema_omits_position_as_a_property() -> None:
         return names
 
     names = property_names(schema)
-    assert "position" not in names
+    assert "position" not in schema["properties"]
+    claim = schema["properties"]["claims"]["items"]["properties"]
+    assert "position" not in claim
+    assert "position" in claim["propositions"]["items"]["properties"]
     assert "assertedFacts" in names
     assert "requestedOutcome" in names
     assert "claimId" in names

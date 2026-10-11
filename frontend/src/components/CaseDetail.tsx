@@ -507,10 +507,10 @@ export function CaseDetail({
             </span>
           ) : null}
 
-          <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning}>
+          <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning || advocateRunning}>
             {resolutionRunning ? "Running analysis…" : resolutionRun ? "Retry / reuse completed work" : "Run full analysis"}
           </button>
-          {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={resolutionRunning}
+          {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={resolutionRunning || advocateRunning}
             title="Revalidate saved demonstration outputs without calling Gemini. Simulated outputs are labelled MOCK DEMO.">
             Show saved demo (replay)
           </button>}

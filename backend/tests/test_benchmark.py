@@ -84,8 +84,10 @@ def _grounding(context: dict, side: str) -> tuple[list[str], str, list[dict]]:
     else:
         asserted = [{"fact": "WAITING_DURATION_SECONDS", "value": facts["waitingDurationSeconds"]}]
 
+    from app.agents.semantic_registry import FACT_EVIDENCE_TYPES
     verified_evidence = [
         item["id"] for item in context["evidence"] if item.get("status") == "Verified"
+        and item["type"].lower() in FACT_EVIDENCE_TYPES[asserted[0]["fact"]]
     ] or [context["evidence"][0]["id"]]
     rule_id = context["policy"]["rules"][0]["ruleId"]
     return verified_evidence, rule_id, asserted
@@ -107,7 +109,7 @@ def _payload(
     both advocates does not fail the *other* one with ``WRONG_SIDE``.
     """
     verified_evidence, rule_id, true_facts = _grounding(context, side)
-    resolved_evidence = verified_evidence[:1] if evidence_ids is None else evidence_ids
+    resolved_evidence = verified_evidence if evidence_ids is None else evidence_ids
     resolved_policy = [rule_id] if policy_refs is None else policy_refs
     resolved_facts = true_facts if asserted_facts is None else asserted_facts
 
@@ -126,9 +128,14 @@ def _payload(
     ]
 
     return {
+        "contractVersion": "atomic-propositions-v2",
         "side": side,
         "summary": f"{side} summary.",
-        "claims": claims,
+        "claims": [dict(claim, propositions=[{
+            "propositionId": "P1", "kind": "FACT", "operator": "EQUALS",
+            "fact": fact["fact"], "value": fact["value"],
+            "evidenceIds": list(resolved_evidence),
+        } for fact in resolved_facts]) for claim in claims],
         "requestedOutcome": "NO_REFUND" if side == "DRIVER" else "PARTIAL_REFUND",
         "contextAcknowledged": True,
     }

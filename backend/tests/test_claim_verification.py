@@ -18,7 +18,7 @@ from app.agents.claim_verification import (
 )
 from app.agents.context_builder import AdvocateContextBuilder
 from app.data.cases import MOCK_CASES
-from app.models.advocate import AdvocateClaim, AdvocateOutput, AssertedFact
+from app.models.advocate import AdvocateClaim, AdvocateOutput, AssertedFact, ClaimProposition, ATOMIC_PROPOSITION_VERSION
 from app.models.agent import AgentCaseContext
 from app.services.dispute_analysis import DisputeAnalysisService
 
@@ -31,8 +31,8 @@ def context_for(case_id: str) -> AgentCaseContext:
     return AdvocateContextBuilder().build(case, analysis)
 
 
-ROUTE_CASE = "CASE-2026-1041"
-NO_SHOW_CASE = "CASE-2026-1043"
+ROUTE_CASE = "DISP-007"
+NO_SHOW_CASE = "DISP-002"
 
 
 def claim(
@@ -58,6 +58,9 @@ def claim(
         reasoning_summary="Because the trusted facts say so.",
         importance="HIGH",
         asserted_facts=asserted or [],
+        propositions=[ClaimProposition(propositionId=f"P{index}", kind="FACT", operator="EQUALS",
+            fact=item.fact, value=item.value, evidenceIds=evidence if evidence is not None else ["E03"])
+            for index, item in enumerate(asserted or [AssertedFact(fact="UNEXPLAINED_DEVIATION_KM", value=1.7)])],
         disputed_evidence_ids=disputed or [],
     )
 
@@ -67,6 +70,7 @@ NO_SHOW_POLICY = "NO_SHOW_WAIT_TIME"
 
 def output(side: str, claims: list[AdvocateClaim]) -> AdvocateOutput:
     return AdvocateOutput(
+        contractVersion=ATOMIC_PROPOSITION_VERSION,
         side=side,
         summary="Summary.",
         claims=claims,
@@ -133,7 +137,7 @@ def test_well_formed_claim_is_verified() -> None:
     good = claim(
         "C1",
         evidence=["E03"],
-        asserted=[AssertedFact(fact="UNEXPLAINED_DEVIATION_KM", value=0.8)],
+        asserted=[AssertedFact(fact="UNEXPLAINED_DEVIATION_KM", value=1.7)],
     )
     outcome = VERIFIER.verify(output("RIDER", [good]), context)
     assert [item.claim_id for item in outcome.verified_claims] == ["C1"]
@@ -160,7 +164,7 @@ def test_float_values_within_tolerance_are_accepted() -> None:
     context = context_for(ROUTE_CASE)
     close_enough = claim(
         "C1",
-        asserted=[AssertedFact(fact="EXPLAINED_DEVIATION_KM", value=0.5000000001)],
+        asserted=[AssertedFact(fact="EXPLAINED_DEVIATION_KM", value=0.0000000001)],
     )
     outcome = VERIFIER.verify(output("RIDER", [close_enough]), context)
     assert [item.claim_id for item in outcome.verified_claims] == ["C1"]
@@ -170,7 +174,7 @@ def test_boolean_fact_is_compared_strictly() -> None:
     context = context_for(NO_SHOW_CASE)
     wrong_bool = claim(
         "C1",
-        evidence=["E03"],
+        evidence=["E02"],
         policy=["NO_SHOW_PICKUP_RADIUS"],
         asserted=[AssertedFact(fact="WITHIN_PICKUP_RADIUS", value=False)],
     )
@@ -237,7 +241,7 @@ def test_duplicate_claim_ids_are_rejected_on_second_occurrence() -> None:
 
 def test_claim_resting_only_on_unverified_evidence_is_rejected() -> None:
     """A claim built only on Missing/Conflicting evidence is not established fact."""
-    context = context_for("CASE-2026-1044")
+    context = context_for("DISP-006")
     unusable = [
         item.id for item in context.evidence if item.status in ("Missing", "Conflicting")
     ]
@@ -249,14 +253,23 @@ def test_claim_resting_only_on_unverified_evidence_is_rejected() -> None:
 
 
 def test_claim_with_at_least_one_verified_evidence_passes_the_quality_check() -> None:
-    context = context_for("CASE-2026-1044")
+    context = context_for("DISP-006")
     usable = [item.id for item in context.evidence if item.status == "Verified"]
     unusable = [
         item.id for item in context.evidence if item.status in ("Missing", "Conflicting")
     ]
     assert usable and unusable, "fixture must contain both kinds of evidence"
 
-    mixed = claim("C1", evidence=[usable[0], unusable[0]], policy=[NO_SHOW_POLICY])
+    mixed = claim("C1", evidence=[usable[0], unusable[0]], policy=[NO_SHOW_POLICY],
+        asserted=[AssertedFact(fact="WAITING_DURATION_SECONDS", value=context.facts.waiting_duration_seconds)])
+    # The atomic contract is stricter than legacy structural quality checking:
+    # a cited unverified source cannot support a FACT, even beside a valid one.
+    rejected = VERIFIER.verify(output("RIDER", [mixed]), context)
+    assert rejected.verified_claims == []
+    from app.agents.semantic_registry import supporting_evidence_ids
+    support = supporting_evidence_ids(context, "WAITING_DURATION_SECONDS")[0]
+    mixed.evidence_ids = [support, unusable[0]]
+    mixed.propositions[0].evidence_ids = [support]
     outcome = VERIFIER.verify(output("RIDER", [mixed]), context)
     assert [item.claim_id for item in outcome.verified_claims] == ["C1"]
 
@@ -265,7 +278,7 @@ def test_claim_with_at_least_one_verified_evidence_passes_the_quality_check() ->
 # Prose contradictions are warnings only
 # ---------------------------------------------------------------------------
 
-def test_numeric_prose_without_asserted_facts_produces_a_warning() -> None:
+def test_numeric_prose_without_asserted_facts_never_enters_trusted_projection() -> None:
     context = context_for(ROUTE_CASE)
     vague = claim("C1", text="The trip was 3 km longer than it should have been.")
     outcome = VERIFIER.verify(output("RIDER", [vague]), context)
@@ -273,15 +286,17 @@ def test_numeric_prose_without_asserted_facts_produces_a_warning() -> None:
     # Not a rejection: Milestone 4 does not use a second AI to judge prose.
     assert [item.claim_id for item in outcome.verified_claims] == ["C1"]
     assert outcome.rejected_claims == []
-    assert any(item.code == "UNVERIFIED_NUMERIC_PROSE" for item in outcome.warnings)
+    assert "3 km" not in outcome.verified_claims[0].trusted_summary
+    assert "1.7" in outcome.verified_claims[0].trusted_summary
+    assert outcome.verified_claims[0].claim == vague.claim  # wording remains audit only
 
 
 def test_prose_numbers_backed_by_asserted_facts_do_not_warn_numerically() -> None:
     context = context_for(ROUTE_CASE)
     backed = claim(
         "C1",
-        text="The trip was 0.8 km unexplained.",
-        asserted=[AssertedFact(fact="UNEXPLAINED_DEVIATION_KM", value=0.8)],
+        text="The trip was 1.7 km unexplained.",
+        asserted=[AssertedFact(fact="UNEXPLAINED_DEVIATION_KM", value=1.7)],
     )
     outcome = VERIFIER.verify(output("RIDER", [backed]), context)
     assert outcome.verified_claims[0].claim_id == "C1"

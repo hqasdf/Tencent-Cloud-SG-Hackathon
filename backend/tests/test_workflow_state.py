@@ -137,10 +137,12 @@ def _advocate_raw(side: str, *, claim_id: str = "C1") -> str:
     """
     case, analysis = _load(ROUTE_CASE)
     context = AdvocateContextBuilder().build(case, analysis)
-    evidence = [item.id for item in context.evidence][:1]
+    from app.agents.semantic_registry import supporting_evidence_ids
+    evidence = supporting_evidence_ids(context, "UNEXPLAINED_DEVIATION_KM")
     policy_refs = [context.policy.rules[0].rule_id]
     return json.dumps(
         {
+            "contractVersion": "atomic-propositions-v2",
             "side": side,
             "summary": f"{side} summary",
             "claims": [
@@ -152,6 +154,9 @@ def _advocate_raw(side: str, *, claim_id: str = "C1") -> str:
                     "reasoningSummary": "Reasoned from the trusted record.",
                     "importance": "HIGH",
                     "assertedFacts": [],
+                    "propositions": [{"propositionId": "P1", "kind": "FACT", "operator": "EQUALS",
+                        "fact": "UNEXPLAINED_DEVIATION_KM", "value": context.facts.unexplained_deviation_distance_km,
+                        "evidenceIds": evidence}],
                     "disputedEvidenceIds": [],
                 }
             ],

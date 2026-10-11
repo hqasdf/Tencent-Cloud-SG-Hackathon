@@ -52,35 +52,37 @@ def test_mock_provider_returns_the_assigned_side_not_a_guessed_one() -> None:
     the driver because the shared rules text contains the word "advocate". This
     test locks in the explicit-metadata contract.
     """
-    rider = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text)
-    driver = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "DRIVER")).raw_text)
+    rider = json.loads(PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text)
+    driver = json.loads(PROVIDER.complete(request_for("DISP-007", "DRIVER")).raw_text)
     assert rider["side"] == "RIDER"
     assert driver["side"] == "DRIVER"
 
 
 def test_mock_provider_is_deterministic_across_calls() -> None:
-    first = PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text
-    second = PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text
+    first = PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text
+    second = PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text
     assert first == second
 
 
 def test_mock_provider_uses_only_trusted_context_values() -> None:
     """Every number the mock cites must come from the trusted context."""
-    payload = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text)
+    payload = json.loads(PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text)
     asserted = {
         item["fact"]: item["value"]
         for claim in payload["claims"]
         for item in claim["assertedFacts"]
     }
-    assert asserted["DEVIATION_PERCENTAGE"] == 22.41
-    assert asserted["UNEXPLAINED_DEVIATION_KM"] == 0.8
-    assert asserted["EXPLAINED_DEVIATION_KM"] == 0.5
+    assert asserted["DEVIATION_PERCENTAGE"] == 8.46
+    assert asserted["UNEXPLAINED_DEVIATION_KM"] == 1.7
+    explained = json.loads(PROVIDER.complete(request_for("DISP-005", "RIDER")).raw_text)
+    assert any(item["fact"] == "EXPLAINED_DEVIATION_KM" and item["value"] == 3.2
+        for claim in explained["claims"] for item in claim["assertedFacts"])
 
 
 def test_mock_provider_acknowledges_adverse_facts() -> None:
     """Both advocates must surface facts that weaken their own position."""
-    rider = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text)
-    driver = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "DRIVER")).raw_text)
+    rider = json.loads(PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text)
+    driver = json.loads(PROVIDER.complete(request_for("DISP-007", "DRIVER")).raw_text)
 
     # The rider admits explained deviation weakens them.
     assert any("EXPLAINED_DEVIATION_KM" in json.dumps(claim) for claim in rider["claims"])
@@ -89,8 +91,8 @@ def test_mock_provider_acknowledges_adverse_facts() -> None:
 
 
 def test_mock_provider_reports_different_outcomes_per_side_on_a_contestable_case() -> None:
-    rider = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "RIDER")).raw_text)
-    driver = json.loads(PROVIDER.complete(request_for("CASE-2026-1041", "DRIVER")).raw_text)
+    rider = json.loads(PROVIDER.complete(request_for("DISP-007", "RIDER")).raw_text)
+    driver = json.loads(PROVIDER.complete(request_for("DISP-007", "DRIVER")).raw_text)
     assert rider["requestedOutcome"] == "PARTIAL_REFUND"
     assert driver["requestedOutcome"] == "NO_REFUND"
 
@@ -110,13 +112,14 @@ def test_mock_provider_requires_context_metadata() -> None:
 
 
 def test_mock_provider_emits_nothing_but_the_contract_fields() -> None:
-    payload = json.loads(PROVIDER.complete(request_for("CASE-2026-1043", "DRIVER")).raw_text)
+    payload = json.loads(PROVIDER.complete(request_for("DISP-002", "DRIVER")).raw_text)
     assert set(payload.keys()) == {
         "side",
         "summary",
         "claims",
         "requestedOutcome",
         "contextAcknowledged",
+        "contractVersion",
     }
     # No answer fields leak into agent output.
     serialized = json.dumps(payload)

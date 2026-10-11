@@ -19,7 +19,7 @@ from app.data.cases import MOCK_CASES
 from app.services.advocate_orchestrator import AdvocateOrchestratorService
 from app.services.dispute_analysis import DisputeAnalysisService
 
-ALL_CASES = ("CASE-2026-1041", "CASE-2026-1042", "CASE-2026-1043", "CASE-2026-1044")
+ALL_CASES = tuple(case.id for case in MOCK_CASES)
 
 
 def load(case_id: str):
@@ -70,7 +70,8 @@ def test_both_advocates_complete_for_every_case(case_id: str) -> None:
     assert result.rider.verified_claims
     assert result.driver.verified_claims
     assert result.rider.rejected_claims == []
-    assert result.driver.rejected_claims == []
+    expected_rejections = [("D2", "EVIDENCE_ID_NOT_FOUND")] if case_id in {"DISP-006", "DISP-009"} else []
+    assert [(claim.claim_id, claim.reason) for claim in result.driver.rejected_claims] == expected_rejections
 
 
 @pytest.mark.parametrize("case_id", ALL_CASES)
@@ -98,12 +99,15 @@ def test_every_verified_claim_cites_evidence_and_policy() -> None:
             for claim in side_result.verified_claims:
                 assert claim.evidence_ids, f"{case_id} verified a claim with no evidence"
                 assert set(claim.evidence_ids) <= evidence_ids
-                assert claim.policy_refs
+                assert claim.verification_level == "ATOMIC_PROPOSITIONS_VERIFIED"
+                assert claim.propositions
+                assert all(p.status in {"VERIFIED", "ARGUMENT_ONLY"} for p in claim.propositions)
+                assert set(claim.policy_refs) == {rule for p in claim.propositions for rule in p.policy_rule_ids}
 
 
 def test_advocates_are_independent_and_may_disagree() -> None:
     """Rider and Driver receive the same facts but are not forced to agree."""
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator().run(case, analysis)
     assert result.rider.requested_outcome == "PARTIAL_REFUND"
     assert result.driver.requested_outcome == "NO_REFUND"
@@ -112,7 +116,7 @@ def test_advocates_are_independent_and_may_disagree() -> None:
 
 def test_each_side_argues_its_own_case_independently() -> None:
     """Rider output is never fed to the Driver and vice versa."""
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator().run(case, analysis)
 
     rider_claim_ids = {claim.claim_id for claim in result.rider.verified_claims}
@@ -127,7 +131,7 @@ def test_each_side_argues_its_own_case_independently() -> None:
 # ---------------------------------------------------------------------------
 
 def test_driver_failure_does_not_break_the_rider() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator(FailOneSideProvider("DRIVER")).run(case, analysis)
 
     assert result.rider.status == "COMPLETE"
@@ -144,7 +148,7 @@ def test_driver_failure_does_not_break_the_rider() -> None:
 
 
 def test_rider_failure_does_not_break_the_driver() -> None:
-    case, analysis = load("CASE-2026-1043")
+    case, analysis = load("DISP-002")
     result = orchestrator(FailOneSideProvider("RIDER")).run(case, analysis)
 
     assert result.rider.status == "FAILED"
@@ -154,7 +158,7 @@ def test_rider_failure_does_not_break_the_driver() -> None:
 
 def test_total_provider_failure_degrades_but_does_not_raise() -> None:
     """The case must stay readable when the provider is completely down."""
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator(ExplodingProvider()).run(case, analysis)
 
     assert result.rider.status == "FAILED"
@@ -171,7 +175,7 @@ def test_total_provider_failure_degrades_but_does_not_raise() -> None:
 
 
 def test_failure_reason_never_leaks_credentials_or_internals() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator(ExplodingProvider()).run(case, analysis)
 
     for side_result in (result.rider, result.driver):
@@ -185,7 +189,7 @@ def test_failure_reason_never_leaks_credentials_or_internals() -> None:
 
 
 def test_verification_summary_totals_match_the_side_results() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator().run(case, analysis)
     expected_verified = len(result.rider.verified_claims) + len(result.driver.verified_claims)
     expected_rejected = len(result.rider.rejected_claims) + len(result.driver.rejected_claims)
@@ -198,7 +202,7 @@ def test_verification_summary_totals_match_the_side_results() -> None:
 # ---------------------------------------------------------------------------
 
 def test_orchestrator_does_not_mutate_the_case_or_analysis() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     case_before = case.model_dump_json(by_alias=True)
     analysis_before = analysis.model_dump_json(by_alias=True)
 
@@ -209,7 +213,7 @@ def test_orchestrator_does_not_mutate_the_case_or_analysis() -> None:
 
 
 def test_run_metadata_describes_mock_mode_without_model_or_secrets() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     result = orchestrator().run(case, analysis)
     assert result.agent_run.mode == "mock"
     assert result.agent_run.provider == "mock"
@@ -219,7 +223,7 @@ def test_run_metadata_describes_mock_mode_without_model_or_secrets() -> None:
 
 
 def test_response_serialises_with_camel_case_keys() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     serialized = orchestrator().run(case, analysis).model_dump_json(by_alias=True)
     payload = json.loads(serialized)
 
@@ -242,7 +246,7 @@ def test_response_serialises_with_camel_case_keys() -> None:
 
 
 def test_orchestrator_is_deterministic_across_runs() -> None:
-    case, analysis = load("CASE-2026-1041")
+    case, analysis = load("DISP-007")
     first = orchestrator().run(case, analysis)
     second = orchestrator().run(case, analysis)
     assert first.rider.model_dump() == second.rider.model_dump()

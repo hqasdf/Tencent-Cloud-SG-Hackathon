@@ -703,7 +703,10 @@ def advocate_json(context, side: str, *, evidence_ids: list[str] | None = None, 
         asserted = [{"fact": "WAITING_DURATION_SECONDS", "value": facts.waiting_duration_seconds}]
     else:  # pragma: no cover - defensive
         asserted = []
+    from app.agents.semantic_registry import supporting_evidence_ids
+    evidence_ids = evidence_ids if evidence_ids is not None else supporting_evidence_ids(context, asserted[0]["fact"])
     payload = {
+        "contractVersion": "atomic-propositions-v2",
         "side": side,
         "summary": f"{side} summary.",
         "claims": [
@@ -715,6 +718,10 @@ def advocate_json(context, side: str, *, evidence_ids: list[str] | None = None, 
                 "reasoningSummary": "Derived from the trusted facts only.",
                 "importance": "HIGH",
                 "assertedFacts": asserted,
+                "propositions": [{"propositionId": "P1", "kind": "FACT", "operator": "EQUALS",
+                    "fact": fact["fact"], "value": fact["value"],
+                    "evidenceIds": evidence_ids if evidence_ids is not None else [context.evidence[0].id]}
+                    for fact in asserted],
                 "disputedEvidenceIds": [],
             }
         ],
@@ -808,6 +815,7 @@ def test_contradicted_structured_fact_from_a_real_model_is_rejected() -> None:
     context, analysis = context_for(case)
     payload = json.loads(advocate_json(context, "RIDER"))
     payload["claims"][0]["assertedFacts"] = [{"fact": "WAITING_DURATION_SECONDS", "value": 999999}]
+    payload["claims"][0]["propositions"][0]["value"] = 999999
     provider, _ = make_provider([ok(json.dumps(payload)), ok(advocate_json(context, "DRIVER"))])
     result = AdvocateOrchestratorService(settings=real_settings(), provider=provider).run(case, analysis)
 
@@ -1016,10 +1024,10 @@ def test_truncated_output_is_flagged_and_keeps_its_token_metrics() -> None:
 
 def test_configured_max_tokens_is_actually_sent() -> None:
     context = context_for(clean_case("route_deviation"))[0]
-    settings = AgentSettings(mode="mock", max_tokens=8192)
+    settings = AgentSettings(mode="mock", max_tokens=900)
     provider, recorded = make_provider([ok(advocate_json(context, "RIDER"))])
     RiderAdvocateAgent(provider, settings).argue(context)
-    assert recorded[0]["json"]["max_tokens"] == 8192
+    assert recorded[0]["json"]["max_tokens"] == 900
 
 
 def test_max_tokens_is_configurable_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:

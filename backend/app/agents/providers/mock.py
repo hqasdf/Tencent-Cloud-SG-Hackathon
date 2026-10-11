@@ -164,16 +164,19 @@ def _judge_output(context: JudgeCaseContext) -> dict:
             )
     else:
         within = facts.driver_within_pickup_radius
+        wait_passed = next((rule.passed for rule in context.policy_evaluation.evaluated_rules
+            if rule.rule_id == "NO_SHOW_WAIT_TIME"), False)
+        charge_supported = within and wait_passed
         outcome = (
-            "UPHOLD_CANCELLATION_CHARGE" if within else "REFUND_CANCELLATION_CHARGE"
+            "UPHOLD_CANCELLATION_CHARGE" if charge_supported else "REFUND_CANCELLATION_CHARGE"
         )
         reasoning = (
             "The driver was recorded "
             + ("inside" if within else "outside")
             + " the pickup radius and the recorded waiting duration is "
-            + ("above" if within else "below")
+            + ("at or above" if wait_passed else "below")
             + " the policy threshold, so the charge is "
-            + ("supported" if within else "not supported")
+            + ("supported" if charge_supported else "not supported")
             + " by the record."
         )
 

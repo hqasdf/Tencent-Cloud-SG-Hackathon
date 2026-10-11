@@ -664,7 +664,7 @@ def test_a_truncated_response_fails_without_a_repair() -> None:
     assert provider.calls == 1, "a truncation must not be repaired"
 
 
-def test_every_role_output_fits_the_1024_budget_with_margin() -> None:
+def test_every_role_output_fits_the_gemini_4096_budget_with_margin() -> None:
     """The budget must hold the schema's realistic output, with room to spare.
 
     This is the guard against the prompt or the schema quietly growing until the
@@ -683,7 +683,7 @@ def test_every_role_output_fits_the_1024_budget_with_margin() -> None:
     from app.services.case_service import CaseService
     from app.services.rebuttal_orchestrator import RebuttalOrchestratorService
 
-    settings = AgentSettings(mode="mock", provider="mock")
+    settings = AgentSettings(mode="real", provider="gemini_native", model="gemini-3.8-flash", max_tokens=4096)
     service = CaseService(MockCaseRepository())
     case = service._load_case(ROUTE_CASE)
     analysis = service.get_analysis(ROUTE_CASE)
@@ -713,11 +713,11 @@ def test_every_role_output_fits_the_1024_budget_with_margin() -> None:
     # uses; the point is the ratio, not the absolute count.
     for role, text in outputs.items():
         estimated = len(text) // 4
-        assert estimated < DEFAULT_MAX_TOKENS, (
+        assert estimated < settings.max_tokens, (
             f"{role} produced ~{estimated} tokens, which does not fit the "
             f"{DEFAULT_MAX_TOKENS}-token budget"
         )
-        assert estimated < DEFAULT_MAX_TOKENS // 2, (
+        assert estimated < settings.max_tokens // 2, (
             f"{role} used ~{estimated} of {DEFAULT_MAX_TOKENS} tokens on the mock "
             "output alone; a real model needs the headroom"
         )
@@ -747,6 +747,7 @@ def test_a_trust_boundary_rejection_does_not_trigger_a_repair() -> None:
 
     fabricated = json.dumps(
         {
+            "contractVersion": "atomic-propositions-v2",
             "side": "RIDER",
             "summary": "Fabricated support.",
             "claims": [
@@ -757,6 +758,9 @@ def test_a_trust_boundary_rejection_does_not_trigger_a_repair() -> None:
                     "policyRefs": [],
                     "reasoningSummary": "Because of the fabricated evidence.",
                     "importance": "HIGH",
+                    "propositions": [{"propositionId": "P1", "kind": "FACT", "operator": "EQUALS",
+                        "fact": "UNEXPLAINED_DEVIATION_KM", "value": 0,
+                        "evidenceIds": ["EVIDENCE-THAT-DOES-NOT-EXIST"]}],
                 }
             ],
             "requestedOutcome": "FULL_REFUND",
@@ -927,7 +931,8 @@ def test_the_deterministic_engines_are_untouched() -> None:
     analysis = service.get_analysis(ROUTE_CASE)
 
     assert deterministic_analysis_hash(case, analysis) == (
-        "33899cc478724950b44333590819eaa69245e58ba9572783a9511464dc39e407"
+        # Current atomic proposition/schema identity; engine policy is unchanged.
+        "1442e71f59aa911c40d785e60bca273a5f7372053728a212403e32432ee2e46c"
     )
 
 

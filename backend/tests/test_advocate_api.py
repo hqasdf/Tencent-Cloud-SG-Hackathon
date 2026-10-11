@@ -20,7 +20,7 @@ from app.services.dispute_analysis import DisputeAnalysisService
 
 client = TestClient(app)
 
-ALL_CASES = ("CASE-2026-1041", "CASE-2026-1042", "CASE-2026-1043", "CASE-2026-1044")
+ALL_CASES = tuple(case.id for case in MOCK_CASES)
 ENDPOINT = "/api/cases/{case_id}/advocates/run"
 
 
@@ -46,12 +46,12 @@ def test_all_four_cases_run_both_advocates() -> None:
 
 def test_get_is_not_allowed() -> None:
     """POST is the declared verb; GET must not silently work."""
-    response = client.get(ENDPOINT.format(case_id="CASE-2026-1041"))
+    response = client.get(ENDPOINT.format(case_id="DISP-007"))
     assert response.status_code == 405
 
 
 def test_response_shape_matches_the_frontend_contract() -> None:
-    payload = run("CASE-2026-1041").json()
+    payload = run("DISP-007").json()
 
     assert set(payload.keys()) == {
         "caseId",
@@ -74,6 +74,7 @@ def test_response_shape_matches_the_frontend_contract() -> None:
             "rejectedClaims",
             "warnings",
             "failureReason",
+            "execution",
         }
 
     assert set(payload["agentRun"].keys()) == {
@@ -82,6 +83,7 @@ def test_response_shape_matches_the_frontend_contract() -> None:
         "model",
         "promptVersion",
         "durationMs",
+        "inputTokens", "outputTokens", "totalTokens",
     }
     assert set(payload["verificationSummary"].keys()) == {
         "verifiedCount",
@@ -91,13 +93,13 @@ def test_response_shape_matches_the_frontend_contract() -> None:
 
 
 def test_judge_stage_is_reported_as_not_run() -> None:
-    payload = run("CASE-2026-1041").json()
+    payload = run("DISP-007").json()
     stages = {item["stage"]: item["status"] for item in payload["pipeline"]}
     assert stages["JUDGE"] == "NOT_RUN"
 
 
 def test_mock_mode_is_reported_honestly() -> None:
-    payload = run("CASE-2026-1041").json()
+    payload = run("DISP-007").json()
     assert payload["agentRun"]["mode"] == "mock"
     assert payload["agentRun"]["provider"] == "mock"
     assert payload["agentRun"]["model"] is None
@@ -125,7 +127,7 @@ def test_rejected_claim_ids_never_appear_in_verified_claims() -> None:
 
 def test_no_answer_fields_are_present_in_the_response() -> None:
     """Advocates argue; they do not decide. No judge verdict may appear."""
-    payload = run("CASE-2026-1041").json()
+    payload = run("DISP-007").json()
     serialized = str(payload)
     for forbidden in (
         "resolutionRecommendation",
@@ -156,7 +158,7 @@ def test_real_mode_without_credentials_returns_503(monkeypatch) -> None:
     monkeypatch.delenv("AGENT_MODEL", raising=False)
     monkeypatch.delenv("AGENT_BASE_URL", raising=False)
 
-    response = run("CASE-2026-1041")
+    response = run("DISP-007")
     assert response.status_code == 503
     # The error must not echo credentials (there are none) but must be actionable.
     assert "AGENT" in response.text or "provider" in response.text.lower()
@@ -168,21 +170,21 @@ def test_real_mode_without_credentials_returns_503(monkeypatch) -> None:
 
 def test_existing_endpoints_are_unaffected() -> None:
     assert client.get("/api/cases").status_code == 200
-    assert client.get("/api/cases/CASE-2026-1041").status_code == 200
-    assert client.get("/api/cases/CASE-2026-1041/analysis").status_code == 200
+    assert client.get("/api/cases/DISP-007").status_code == 200
+    assert client.get("/api/cases/DISP-007/analysis").status_code == 200
 
 
 def test_deterministic_analysis_is_identical_before_and_after_advocates_run() -> None:
     """The strongest regression guard: advocates must not touch the analysis."""
-    before = client.get("/api/cases/CASE-2026-1041/analysis").json()
-    run("CASE-2026-1041")
-    after = client.get("/api/cases/CASE-2026-1041/analysis").json()
+    before = client.get("/api/cases/DISP-007/analysis").json()
+    run("DISP-007")
+    after = client.get("/api/cases/DISP-007/analysis").json()
     assert before == after
 
 
 def test_running_advocates_twice_is_idempotent_in_mock_mode() -> None:
-    first = run("CASE-2026-1043").json()
-    second = run("CASE-2026-1043").json()
+    first = run("DISP-002").json()
+    second = run("DISP-002").json()
     first["agentRun"]["durationMs"] = 0
     second["agentRun"]["durationMs"] = 0
     assert first == second
@@ -231,7 +233,7 @@ class HallucinatingProvider:
 
 def test_deliberate_hallucination_is_rejected_and_audited() -> None:
     """CODE catches the AI. The claim is rejected, visible, and never verified."""
-    case = next(item for item in MOCK_CASES if item.id == "CASE-2026-1041")
+    case = next(item for item in MOCK_CASES if item.id == "DISP-007")
     analysis = DisputeAnalysisService().analyze(case)
 
     result = AdvocateOrchestratorService(

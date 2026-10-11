@@ -12,7 +12,10 @@ class RouteDeviationService:
             raise ValueError("Route deviation analysis input is required")
 
         evidence_by_id = {item.id: item for item in case.evidence}
-        missing = [item_id for item_id in policy.required_evidence_ids if item_id not in evidence_by_id]
+        missing = [
+            item_id for item_id in policy.required_evidence_ids
+            if item_id not in evidence_by_id or evidence_by_id[item_id].status == "Missing"
+        ]
         contradictory = any(item.status == "Conflicting" for item in case.evidence)
         distance_difference = max(payload.actual_route_distance_km - payload.expected_route_distance_km, 0)
         deviation_percentage = (distance_difference / payload.expected_route_distance_km) * 100

@@ -31,6 +31,21 @@ takes precedence over everything here.
 from __future__ import annotations
 
 import os
+import tempfile
+from pathlib import Path
+
+# Keep the ordinary full-suite command isolated from developer intake, replay
+# artifacts and signed checkpoints. Individual tests still inject their own stores.
+_scratch = Path(__file__).resolve().parents[1] / ".pytest-scratch"
+_scratch.mkdir(exist_ok=True)
+_session_storage = tempfile.TemporaryDirectory(prefix="offline-session-", dir=_scratch)
+_storage = Path(_session_storage.name)
+from app.repositories import intake_repository
+intake_repository.DB_PATH = _storage / "intake.db"
+os.environ["AGENT_CHECKPOINT_DIR"] = str(_storage / "checkpoints")
+os.environ["REPLAY_ARTIFACT_DIR"] = str(_storage / "replay")
+os.environ["REPLAY_API_ENABLED"] = "0"
+os.environ["AGENT_MAX_TOKENS"] = "1024"
 
 # Force the advocates onto the deterministic, offline provider.
 os.environ["AGENT_MODE"] = "mock"
