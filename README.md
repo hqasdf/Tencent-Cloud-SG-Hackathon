@@ -9,6 +9,8 @@ Submission blurb: **Evidence-driven AI dispute resolution with auditable, code-c
 
 Submission requirements, limitations, Git plan and manual Opera checklist: [Phase 5B readiness](docs/phase5b-submission-readiness.md). Short rehearsal: [three-minute script](docs/phase5b-demo-script.md). Public deployment is not yet available.
 
+Final submission setup and approval gate: [secure release preparation](docs/final-release-preparation.md). Security findings and required demo mitigations: [security audit](docs/security-audit-20261012.md).
+
 ## ⚠️ Two implementations exist in this repository
 
 This repository contains **two separate implementations**. Only one of them is the
@@ -20,7 +22,7 @@ running application. Please read this before exploring the code.
 
 | Path | Role |
 | --- | --- |
-| `backend/` | FastAPI backend. Deterministic analysis engine, evidence validation, case replay, and the Stage 4 Rider + Driver advocate agents. |
+| `backend/` | FastAPI backend. AI intake, deterministic analysis, evidence and claim verification, five AI roles, signed recovery and replay. |
 | `frontend/` | React + TypeScript case workspace UI. Talks to the backend over HTTP. |
 
 Start it with `start-backend.bat` and `start-frontend.bat`, or see
@@ -45,7 +47,7 @@ behaviour of the active application. Do not add features here; make changes in
 The whole system is built around one rule:
 
 > **CODE calculates facts. AI argues from facts. CODE checks AI claims.
-> The Judge decides later, using only verified information.**
+> The Judge advises from verified information. CODE determines the final outcome.**
 
 In practice this means:
 
@@ -80,7 +82,7 @@ the deterministic product and offline agent tests remain usable.
 
 ```powershell
 python -m venv backend/.venv
-backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.txt
+backend/.venv/Scripts/python.exe -m pip install -r backend/requirements.lock -r backend/requirements.txt
 cd frontend
 npm ci
 cd ..

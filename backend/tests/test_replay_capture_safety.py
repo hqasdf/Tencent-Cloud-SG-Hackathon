@@ -50,7 +50,7 @@ ROUTE_CASE = "DISP-005"
 MOCK_SETTINGS = AgentSettings(mode="mock", provider="mock")
 
 _BACKEND = Path(__file__).resolve().parent.parent
-_HARNESS = _BACKEND / ".live-validation" / "live_run.py"
+_HARNESS = _BACKEND / "tests" / "support" / "harness.py"
 
 
 # ---------------------------------------------------------------------------
@@ -121,9 +121,8 @@ def store(tmp_path: Path) -> ReplayArtifactStore:
 def harness():
     """The live-validation harness, imported by path.
 
-    ``.live-validation`` is not a package, so the module is loaded from its file.
-    Importing it runs only module-level definitions — ``main()`` is behind an
-    ``if __name__ == "__main__"`` guard — so this costs no network.
+    The test-support directory is file-loaded, so the module is loaded from its file.
+    Importing it runs only module-level definitions — there is no CLI entry point — so this costs no network.
     """
     spec = importlib.util.spec_from_file_location("live_run_under_test", _HARNESS)
     assert spec is not None and spec.loader is not None

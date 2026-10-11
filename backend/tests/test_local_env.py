@@ -28,7 +28,8 @@ def test_env_file_is_resolved_next_to_the_backend_package() -> None:
     """The path must not depend on the current working directory."""
     assert ENV_FILE.name == ".env"
     assert ENV_FILE.parent.name == "backend"
-    assert ENV_FILE.parent.parent.name == "Tencent-Cloud-SG-Hackathon"
+    import app.env as env_module
+    assert ENV_FILE == Path(env_module.__file__).resolve().parents[1] / ".env"
 
 
 def test_load_local_env_is_idempotent() -> None:

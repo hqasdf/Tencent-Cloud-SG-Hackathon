@@ -39,7 +39,7 @@ from app.agents.config import AgentSettings
 MOCK_SETTINGS = AgentSettings(mode="mock", provider="mock")
 
 _BACKEND = Path(__file__).resolve().parent.parent
-_HARNESS = _BACKEND / ".live-validation" / "live_run.py"
+_HARNESS = _BACKEND / "tests" / "support" / "harness.py"
 
 
 # ---------------------------------------------------------------------------
@@ -51,9 +51,8 @@ _HARNESS = _BACKEND / ".live-validation" / "live_run.py"
 def harness():
     """The live-validation harness, imported by path.
 
-    ``.live-validation`` is not a package, so the module is loaded from its file.
-    Importing runs only module-level definitions -- ``main()`` is behind an
-    ``if __name__ == "__main__"`` guard -- so this costs no network.
+    The test-support directory is file-loaded, so the module is loaded from its file.
+    Importing runs only module-level definitions -- there is no CLI entry point -- so this costs no network.
     """
     spec = importlib.util.spec_from_file_location("live_run_stop_under_test", _HARNESS)
     assert spec is not None and spec.loader is not None

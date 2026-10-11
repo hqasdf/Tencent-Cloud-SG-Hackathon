@@ -13,6 +13,7 @@ from app.repositories.intake_repository import IntakeCaseRepository
 from app.services.conversation_service import ConversationService, IntakeTransitionError
 from app.services.intake_analysis_service import IntakeAnalysisError, IntakeAnalysisService
 from app.services.intake_provider import IntakeProviderError
+from app.services.agent_checkpoints import CheckpointBusy, CheckpointStorageError
 
 router = APIRouter(prefix="/api/intake", tags=["intake"])
 
@@ -70,6 +71,10 @@ def send_message(intake_case_id: str, request: SendMessageRequest) -> SendMessag
             status_code=error.status_code,
             detail={"code": error.code, "message": str(error)},
         ) from error
+    except CheckpointBusy:
+        raise HTTPException(status_code=409, detail={"code": "INTAKE_REQUEST_IN_PROGRESS", "message": "An intake action is already running."}) from None
+    except CheckpointStorageError:
+        raise HTTPException(status_code=503, detail={"code": "INTAKE_STORAGE_UNAVAILABLE", "message": "Intake request storage is unavailable."}) from None
     return SendMessageResponse(case=case, assistant_message=assistant_msg, execution=execution)
 
 
@@ -139,6 +144,10 @@ def skip_rebuttal(intake_case_id: str) -> IntakeCase:
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": error.code, "message": str(error)},
         ) from error
+    except CheckpointBusy:
+        raise HTTPException(status_code=409, detail={"code": "INTAKE_REQUEST_IN_PROGRESS", "message": "An intake action is already running."}) from None
+    except CheckpointStorageError:
+        raise HTTPException(status_code=503, detail={"code": "INTAKE_STORAGE_UNAVAILABLE", "message": "Intake request storage is unavailable."}) from None
 
 
 @router.post("/cases/{intake_case_id}/analyse", response_model=CaseAnalysisResponse)

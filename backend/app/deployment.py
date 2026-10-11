@@ -45,6 +45,9 @@ def allowed_origins() -> list[str]:
 def validate_production() -> None:
     if not production_mode():
         return
+    # New SQLite/replay/lock files are private to the container service owner.
+    # Do not change permissions or contents of any existing developer data.
+    os.umask(0o077)
     allowed_origins()
     # Explicit paths make the persistent-volume requirement reviewable. This
     # checks availability; the deployment must actually mount durable storage.

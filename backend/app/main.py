@@ -3,17 +3,23 @@
 from app.env import load_local_env
 load_local_env()
 
-from app.deployment import DEV_ORIGINS, allowed_origins, validate_production
+from app.deployment import DEV_ORIGINS, allowed_origins, production_mode, validate_production
 validate_production()  # Before route import can initialize SQLite.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from app.security import RequestBoundary, redacted_validation_error
 
 from app.agents.config import AgentConfigurationError, AgentSettings
 from app.api.cases import router as case_router
 from app.api.intake import router as intake_router
 
-app = FastAPI(title="RydeResolve Case API", version="0.2.0")
+app = FastAPI(title="RydeResolve Case API", version="0.2.0",
+              docs_url=None if production_mode() else "/docs",
+              redoc_url=None if production_mode() else "/redoc",
+              openapi_url=None if production_mode() else "/openapi.json")
+app.add_exception_handler(RequestValidationError, redacted_validation_error)
 
 # Vite auto-increments its port when 5173 is busy ("Port 5173 is in use, trying
 # another one..."), so a fixed pair of origins breaks the moment a stale dev
@@ -30,6 +36,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.add_middleware(RequestBoundary)
 app.include_router(case_router)
 app.include_router(intake_router)
 

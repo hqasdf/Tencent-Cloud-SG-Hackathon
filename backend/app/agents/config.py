@@ -95,7 +95,7 @@ class AgentSettings:
         mode = (os.getenv("AGENT_MODE") or "mock").strip().lower()
         if mode not in ("mock", "real"):
             raise AgentConfigurationError(
-                f"AGENT_MODE must be 'mock' or 'real', received {mode!r}"
+                "AGENT_MODE must be 'mock' or 'real'"
             )
         provider = (os.getenv("AGENT_PROVIDER") or ("mock" if mode == "mock" else "")).strip()
         provider = provider or "mock"
@@ -205,7 +205,7 @@ def _float_env(name: str, default: float) -> float:
     try:
         return float(raw)
     except ValueError as error:
-        raise AgentConfigurationError(f"{name} must be a number, received {raw!r}") from error
+        raise AgentConfigurationError(f"{name} must be a number") from None
 
 
 def _bounded_float_env(name: str, default: float, *, maximum: float) -> float:
@@ -258,7 +258,7 @@ def _reasoning_effort_env() -> str | None:
         raise AgentConfigurationError(
             "AGENT_REASONING_EFFORT must be one of "
             f"{', '.join(sorted(SUPPORTED_REASONING_EFFORTS))} (or empty to defer "
-            f"to the provider), received {value!r}"
+            "to the provider)"
         )
     return value
 
@@ -275,7 +275,7 @@ def _int_env(name: str, default: int, *, minimum: int = 1) -> int:
     try:
         value = int(raw)
     except ValueError as error:
-        raise AgentConfigurationError(f"{name} must be an integer, received {raw!r}") from error
+        raise AgentConfigurationError(f"{name} must be an integer") from None
     if value < minimum:
         raise AgentConfigurationError(f"{name} must be >= {minimum}, received {value}")
     return value

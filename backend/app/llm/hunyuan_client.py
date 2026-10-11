@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
 
 @dataclass(frozen=True)
 class HunyuanConfig:
-    api_key: str
+    api_key: str = field(repr=False)
     base_url: str
     model: str
 
@@ -89,12 +89,12 @@ class HunyuanClient:
                 response = client.post(url, json=payload, headers=headers)
         except httpx.RequestError as error:
             raise HunyuanUnavailableError(
-                message=f"Could not reach the AI service: {error}"
-            ) from error
+                message="Could not reach the AI service."
+            ) from None
 
         if response.status_code != 200:
             raise HunyuanUnavailableError(
-                message=f"AI service returned status {response.status_code}: {response.text[:300]}",
+                message=f"AI service returned status {response.status_code}.",
             )
 
         try:
@@ -102,13 +102,13 @@ class HunyuanClient:
         except ValueError as error:
             raise HunyuanUnavailableError(
                 message="AI service returned non-JSON response."
-            ) from error
+            ) from None
 
         try:
             content = body["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as error:
             raise HunyuanUnavailableError(
                 message="AI service response did not contain a message."
-            ) from error
+            ) from None
 
         return HunyuanResult(content=content, ok=True)

@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 from app.models.replay import ARTIFACT_NOT_FOUND, MALFORMED_ARTIFACT
@@ -63,6 +64,13 @@ _FORBIDDEN_KEYS = frozenset(
 
 # Keys whose *value* would be a credential even under an innocent name.
 _FORBIDDEN_VALUE_PREFIXES = ("Bearer ", "AIza", "sk-")
+_CREDENTIAL_PATTERNS = (
+    re.compile(r"AIza[0-9A-Za-z_-]{35}"),
+    re.compile(r"(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})"),
+    re.compile(r"AKID[A-Za-z0-9]{32}"),
+    re.compile(r"sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{30,}"),
+    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
+)
 
 
 class ReplayArtifactError(ValueError):
@@ -103,6 +111,9 @@ def forbidden_values_in(payload: object) -> list[str]:
             for item in node:
                 walk(item)
         elif isinstance(node, str):
+            if any(pattern.search(node) for pattern in _CREDENTIAL_PATTERNS):
+                found.append("embedded credential")
+                return
             for prefix in _FORBIDDEN_VALUE_PREFIXES:
                 if node.startswith(prefix):
                     found.append(prefix.strip())
@@ -133,7 +144,16 @@ class ReplayArtifactStore:
         return self._curated
 
     def path_for(self, case_id: str, stage: str) -> Path:
-        return self._root / case_id / FILENAME_BY_STAGE[stage]
+        return self._safe_path(self._root, case_id, stage)
+
+    @staticmethod
+    def _safe_path(root: Path, case_id: str, stage: str) -> Path:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", case_id) or stage not in FILENAME_BY_STAGE:
+            raise ReplayArtifactError("Invalid replay case or stage")
+        path = root / case_id / FILENAME_BY_STAGE[stage]
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise ReplayArtifactError("Replay path is outside its configured storage")
+        return path
 
     # -- write ------------------------------------------------------------
 
@@ -173,10 +193,16 @@ class ReplayArtifactStore:
         code instead of a traceback — the developer asked for a replay, and the
         answer to "may I have one?" should be a reason code either way.
         """
-        for candidate in self._candidates(case_id, stage):
+        try:
+            candidates = self._candidates(case_id, stage)
+        except ReplayArtifactError:
+            return None, [MALFORMED_ARTIFACT]
+        for candidate in candidates:
             if not candidate.is_file():
                 continue
             try:
+                if candidate.stat().st_size > 2 * 1024 * 1024:
+                    return None, [MALFORMED_ARTIFACT]
                 document = json.loads(candidate.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 return None, [MALFORMED_ARTIFACT]
@@ -187,8 +213,7 @@ class ReplayArtifactStore:
         return any(candidate.is_file() for candidate in self._candidates(case_id, stage))
 
     def _candidates(self, case_id: str, stage: str) -> list[Path]:
-        filename = FILENAME_BY_STAGE[stage]
-        return [self._root / case_id / filename, self._curated / case_id / filename]
+        return [self._safe_path(root, case_id, stage) for root in (self._root, self._curated)]
 
     @staticmethod
     def _parse(

@@ -10,9 +10,9 @@ export class ErrorBoundary extends Component<Props, State> {
     return { error };
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo): void {
+  componentDidCatch(_error: Error, _info: ErrorInfo): void {
     // eslint-disable-next-line no-console
-    console.error("UI crash:", error, info);
+    console.error("RydeResolve UI rendering failed.");
   }
 
   render() {
@@ -20,10 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="app-state">
           <h1>Something went wrong</h1>
-          <p>{this.state.error.message}</p>
-          <pre style={{ fontSize: "11px", textAlign: "left", background: "#f7f8fc", padding: 12, borderRadius: 8, overflow: "auto" }}>
-            {this.state.error.stack}
-          </pre>
+          <p>The page could not be displayed. Saved interviews and completed analysis stages remain on the server.</p>
           <button onClick={() => { this.setState({ error: null }); window.location.reload(); }}>
             Reload
           </button>

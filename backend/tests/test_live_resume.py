@@ -55,8 +55,8 @@ LIVE_SETTINGS = AgentSettings(mode=MODE, provider=PROVIDER, model=MODEL)
 ROUTE_CASE = "DISP-005"
 
 _BACKEND = Path(__file__).resolve().parent.parent
-_HARNESS = _BACKEND / ".live-validation" / "live_run.py"
-_CHECKPOINTS = _BACKEND / ".live-validation" / "checkpoints.py"
+_HARNESS = _BACKEND / "tests" / "support" / "harness.py"
+_CHECKPOINTS = _BACKEND / "tests" / "support" / "checkpoints.py"
 
 
 def _load(name: str, path: Path):
@@ -80,7 +80,7 @@ def _load(name: str, path: Path):
 
 @pytest.fixture(scope="module")
 def checkpoints():
-    """The resume planner, imported by path (``.live-validation`` is not a package)."""
+    """The resume planner, imported by path (The test-support directory is file-loaded)."""
     return _load("checkpoints_under_test", _CHECKPOINTS)
 
 

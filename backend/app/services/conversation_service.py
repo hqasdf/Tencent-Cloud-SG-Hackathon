@@ -17,6 +17,8 @@ from app.services.intake_provider import (
     IntakeTurnProvider,
     RegistryIntakeProvider,
 )
+from app.services.agent_checkpoints import AgentCheckpointStore
+from app.replay.store import forbidden_values_in
 
 MAX_MESSAGE_CHARS = 4000
 MAX_PARTY_USER_MESSAGES = 20
@@ -73,6 +75,16 @@ class ConversationService:
         self._intake_provider = intake_provider or RegistryIntakeProvider()
 
     def send_message(
+        self, *, intake_case_id: str, party: Party, content: str,
+    ) -> tuple[IntakeCase, IntakeMessage, IntakeExecutionMetadata]:
+        # Share the existing OS-backed lock mechanism; no new signing format.
+        # Validate existence before creating lock files for an arbitrary ID.
+        if self._repository.get_case(intake_case_id) is None:
+            raise LookupError("Intake case not found")
+        with AgentCheckpointStore().request_lock("intake:" + intake_case_id):
+            return self._send_message(intake_case_id=intake_case_id, party=party, content=content)
+
+    def _send_message(
         self,
         *,
         intake_case_id: str,
@@ -84,6 +96,8 @@ class ConversationService:
             raise ValueError("Message content cannot be blank")
         if len(clean_content) > MAX_MESSAGE_CHARS:
             raise ValueError(f"Message content cannot exceed {MAX_MESSAGE_CHARS} characters")
+        if forbidden_values_in(clean_content):
+            raise ValueError("Do not include credentials in interview messages")
 
         case = self._repository.get_case(intake_case_id)
         if case is None:
@@ -184,6 +198,12 @@ class ConversationService:
         return refreshed, assistant_message, result.execution
 
     def skip_rebuttal(self, intake_case_id: str) -> IntakeCase:
+        if self._repository.get_case(intake_case_id) is None:
+            raise LookupError("Intake case not found")
+        with AgentCheckpointStore().request_lock("intake:" + intake_case_id):
+            return self._skip_rebuttal(intake_case_id)
+
+    def _skip_rebuttal(self, intake_case_id: str) -> IntakeCase:
         case = self._repository.get_case(intake_case_id)
         if case is None:
             raise LookupError(f"Intake case {intake_case_id} not found")

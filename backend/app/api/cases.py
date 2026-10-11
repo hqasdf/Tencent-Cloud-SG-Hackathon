@@ -59,6 +59,10 @@ def run_case_advocates(
         raise HTTPException(status_code=422, detail={"message": "CaseReplay validation failed", "issues": [issue.__dict__ for issue in error.issues]}) from error
     except AgentConfigurationError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    except CheckpointBusy:
+        raise HTTPException(status_code=409, detail={"code": "ANALYSIS_IN_PROGRESS", "message": "Analysis for this case is already running."}) from None
+    except CheckpointStorageError:
+        raise HTTPException(status_code=503, detail={"code": "CHECKPOINT_STORAGE_UNAVAILABLE", "message": "Analysis request storage is unavailable."}) from None
 
 
 @router.post("/cases/{case_id}/resolution/run", response_model=CaseResolutionResponse)

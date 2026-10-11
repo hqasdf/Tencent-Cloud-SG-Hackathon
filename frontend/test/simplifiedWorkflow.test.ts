@@ -104,3 +104,20 @@ test('completed review points to the decision instead of triggering another mode
   assert.ok(html.includes('View decision')); assert.ok(html.includes('Run analysis again'));
   assert.ok(!html.includes('Advocates only')); assert.ok(html.includes('MOCK DEMO'));
 });
+test('untrusted model text is escaped instead of rendered as executable markup', () => {
+  const payload = '<img src=x onerror="alert(1)"><script>alert(1)</script>';
+  const html = render(AiReviewTimeline, { rider: { ...side('RIDER'), summary: payload }, driver: side('DRIVER'), resolution: null });
+  assert.ok(!html.includes('<script>')); assert.ok(!html.includes('<img'));
+  assert.ok(html.includes('&lt;img')); assert.ok(html.includes('&lt;script&gt;'));
+});
+test('UI crashes do not disclose private error messages or stacks', () => {
+  const { ErrorBoundary } = load(resolve(root, 'components/ErrorBoundary.tsx'));
+  const boundary = new ErrorBoundary({ children: null });
+  boundary.state = { error: new Error('SYNTHETIC_PRIVATE_ERROR') };
+  const html = renderToStaticMarkup(boundary.render());
+  assert.ok(!html.includes('SYNTHETIC_PRIVATE_ERROR')); assert.ok(html.includes('Saved interviews'));
+  const previous = console.error; const logged = []; console.error = (...args) => logged.push(args.join(' '));
+  try { boundary.componentDidCatch(boundary.state.error, { componentStack: 'SYNTHETIC_PRIVATE_STACK' }); }
+  finally { console.error = previous; }
+  assert.ok(!logged.join(' ').includes('SYNTHETIC_PRIVATE'));
+});

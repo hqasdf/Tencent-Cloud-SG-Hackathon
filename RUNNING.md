@@ -2,6 +2,8 @@
 
 The FastAPI backend and React frontend run in separate terminals.
 
+For the credential-free submission demonstration, use the fresh-checkout procedure in [secure release preparation](docs/final-release-preparation.md). Production must use the authenticated gateway described in [deployment preparation](docs/phase5a-deployment.md).
+
 ## Windows quick start
 
 1. Double-click `start-backend.bat` for `http://127.0.0.1:8000`.
@@ -18,9 +20,9 @@ From the repository root:
 
 ```powershell
 py -3 -m venv backend\.venv
-backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.lock -r backend\requirements.txt
 cd frontend
-npm install
+npm ci
 ```
 
 Copy `backend/.env.example` to `backend/.env`. The `.env` file is local and
@@ -42,11 +44,11 @@ After rotating any exposed key, live Gemini configuration is:
 ```dotenv
 AGENT_MODE=real
 AGENT_PROVIDER=gemini_native
-AGENT_MODEL=<model available to your account>
+AGENT_MODEL=gemini-3.8-flash
 AGENT_API_KEY=<new server-side credential>
 AGENT_TIMEOUT_SECONDS=30
-AGENT_MAX_TOKENS=1024
-AGENT_MAX_RETRIES=2
+AGENT_MAX_TOKENS=4096
+AGENT_MAX_RETRIES=1
 ```
 
 `AGENT_API_KEY` and `AGENT_MODEL` are shared by Rider/Driver intake, rider intake
@@ -78,7 +80,7 @@ npm run dev
 | --- | --- |
 | `http://127.0.0.1:5173` | Frontend UI |
 | `http://127.0.0.1:8000/api/health` | Backend health and safe provider metadata |
-| `http://127.0.0.1:8000/docs` | Swagger API documentation |
+| `http://127.0.0.1:8000/docs` | Development-only Swagger API documentation; disabled in production |
 | `http://127.0.0.1:8000/api/cases` | Case list |
 | `http://127.0.0.1:8000/api/intake/trips` | Intake trip list |
 

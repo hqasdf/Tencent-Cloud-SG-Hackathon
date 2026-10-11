@@ -57,22 +57,16 @@ class AgentCheckpointStore:
         self.root = Path(root or os.environ.get("AGENT_CHECKPOINT_DIR") or DEFAULT_ROOT)
 
     @contextmanager
-    def session(self, case_id: str, settings: AgentSettings, provider: str, analysis_hash: str):
+    def request_lock(self, case_id: str):
         directory = self.root / hashlib.sha256(case_id.encode()).hexdigest()
         lock = None
         try:
-            directory.mkdir(parents=True, exist_ok=True)
+            directory.mkdir(mode=0o700, parents=True, exist_ok=True)
             lock = sqlite3.connect(directory / "request-lock.sqlite3", timeout=0.1)
             try:
                 lock.execute("BEGIN IMMEDIATE")
             except sqlite3.OperationalError as error:
                 raise CheckpointBusy("Analysis for this case is already running.") from error
-            key_path = directory / "integrity.key"
-            if not key_path.exists():
-                _atomic_write(key_path, secrets.token_bytes(32))
-            key = key_path.read_bytes()
-            if len(key) != 32:
-                raise CheckpointStorageError("Checkpoint integrity key is invalid.")
         except (OSError, sqlite3.Error) as error:
             if lock is not None:
                 lock.close()
@@ -82,10 +76,24 @@ class AgentCheckpointStore:
                 lock.close()
             raise
         try:
-            yield CheckpointSession(directory, key, settings, provider, analysis_hash)
+            yield directory
         finally:
             lock.rollback()
             lock.close()
+
+    @contextmanager
+    def session(self, case_id: str, settings: AgentSettings, provider: str, analysis_hash: str):
+        with self.request_lock(case_id) as directory:
+            try:
+                key_path = directory / "integrity.key"
+                if not key_path.exists():
+                    _atomic_write(key_path, secrets.token_bytes(32))
+                key = key_path.read_bytes()
+                if len(key) != 32:
+                    raise CheckpointStorageError("Checkpoint integrity key is invalid.")
+            except OSError:
+                raise CheckpointStorageError("Checkpoint storage is unavailable.") from None
+            yield CheckpointSession(directory, key, settings, provider, analysis_hash)
 
 
 class CheckpointSession:

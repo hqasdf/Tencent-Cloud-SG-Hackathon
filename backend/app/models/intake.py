@@ -99,12 +99,14 @@ class IntakeCase(IntakeModel):
 
 
 class CreateIntakeCaseRequest(IntakeModel):
-    trip_id: str = Field(serialization_alias="tripId", validation_alias="tripId")
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    trip_id: str = Field(min_length=1, max_length=100, serialization_alias="tripId", validation_alias="tripId")
 
 
 class SendMessageRequest(IntakeModel):
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
     party: Party
-    content: str
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class IntakeStructuredReply(BaseModel):

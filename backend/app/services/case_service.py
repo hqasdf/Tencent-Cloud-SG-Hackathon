@@ -77,7 +77,11 @@ class CaseService:
         case = self._load_case(case_id)
         analysis = self._analysis_with_intake(case)
         orchestrator = AdvocateOrchestratorService()
-        return orchestrator.run(case, analysis)
+        from app.services.agent_checkpoints import AgentCheckpointStore
+        # Same case lock as full resolution; the standalone endpoint must not
+        # purchase overlapping calls that bypass the full-run request guard.
+        with AgentCheckpointStore().request_lock(case_id):
+            return orchestrator.run(case, analysis)
 
     def get_resolution_run(
         self, case_id: str, replay_mode: ReplayMode = NO_REPLAY

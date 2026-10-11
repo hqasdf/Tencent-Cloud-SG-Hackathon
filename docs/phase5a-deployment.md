@@ -156,7 +156,7 @@ offline demonstrations.
 9. Check the protected health endpoint with `curl --user "$DEMO_USER"` and the
    domain's `/api/health` URL; curl prompts for the password instead of storing it
    in the command. Do not use verbose header logging. Open the website manually,
-   select DISP-005 and click **Show saved demo (replay)** once. Expect MOCK_DEMO,
+   select DISP-005 and click **More options -> View saved demo** once. Expect MOCK_DEMO,
    five completed roles, partial/empty intake provenance and NO_REFUND/SGD 0.00.
    This does not claim completed live interviews. Do not click live analysis or
    Send without separate approval.
