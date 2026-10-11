@@ -3,11 +3,11 @@ from __future__ import annotations
 from app.data.trip_mapping import get_source_case
 from app.models.analysis import (
     CaseAnalysisResponse,
+    IntakeContext,
     PartyContradiction,
     PartyStatement,
 )
-from app.models.intake import PartyFact
-from app.policies import CONFIDENCE_POLICY_V1
+from app.models.intake import IntakeCase, InterviewState, PartyFact
 from app.repositories.intake_repository import IntakeCaseRepository
 from app.services.case_replay import CaseReplayService
 from app.services.dispute_analysis import DisputeAnalysisService
@@ -29,8 +29,8 @@ class IntakeAnalysisService:
 
     After the deterministic engine produces its result, this service:
 
-    * Attaches the rider and driver party statements (B) so a human reviewer
-      or the Judge step can see what each party actually said during intake.
+    * Attaches attributed allegations for advocates and human reviewers.
+      Raw allegations are excluded from the advisory Judge's context.
     * Detects contradictions between rider and driver claims on the same fact
       key (C). When contradictions are found, the confidence score is lowered
       and the case is forced to HUMAN_REVIEW with a ``PARTY_CONTRADICTION``
@@ -56,6 +56,8 @@ class IntakeAnalysisService:
             raise IntakeAnalysisError(
                 "Both rider and driver interviews must be complete before analysis."
             )
+        if case.lifecycle == "RIDER_REBUTTAL":
+            raise IntakeAnalysisError("Complete or skip the rider clarification before analysis.")
 
         # Update lifecycle to ANALYSING
         self._repository.update_lifecycle(
@@ -94,36 +96,7 @@ class IntakeAnalysisService:
         # Run the existing deterministic analysis
         analysis = self._dispute_analysis.analyze(validated_case)
 
-        # --- B: Attach party statements from the intake interviews ---
-        party_statements = _build_party_statements(case.rider_state, case.driver_state)
-
-        # --- C: Detect contradictions between rider and driver claims ---
-        contradictions = _detect_contradictions(case.rider_state, case.driver_state)
-
-        if contradictions:
-            # Lower the confidence score
-            penalty = _PARTY_CONTRADICTION_PENALTY * len(contradictions)
-            adjusted_confidence = max(
-                0.0,
-                analysis.confidence.overall_confidence - penalty,
-            )
-            analysis = analysis.model_copy(update={
-                "confidence": analysis.confidence.model_copy(update={
-                    "overall_confidence": round(adjusted_confidence, 2),
-                    "contradiction_penalty": round(
-                        analysis.confidence.contradiction_penalty + penalty, 2
-                    ),
-                }),
-                # Force human review when parties contradict each other
-                "resolution_mode": "HUMAN_REVIEW",
-                "escalation_reasons": analysis.escalation_reasons + ["PARTY_CONTRADICTION"],
-            })
-
-        # Attach the party statements and contradictions to the response
-        analysis = analysis.model_copy(update={
-            "party_statements": party_statements,
-            "party_contradictions": contradictions,
-        })
+        analysis = attach_intake_context(analysis, case)
 
         # Save the analysis
         analysis_dict = analysis.model_dump(by_alias=True, mode="json")
@@ -151,11 +124,94 @@ class IntakeAnalysisService:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def attach_intake_context(analysis: CaseAnalysisResponse, case: IntakeCase) -> CaseAnalysisResponse:
+    """Project persisted allegations; never replace calculation inputs or evidence."""
+    from app.agents.context_builder import AdvocateContextBuilder
+    from app.agents.claim_verification import fact_values, values_match
+    from app.agents.semantic_registry import supporting_evidence_ids
+
+    if case.source_case_id != analysis.case_id:
+        raise IntakeAnalysisError("Intake belongs to a different source case.")
+    source = get_source_case(case.trip_id)
+    if source is None or source.id != analysis.case_id:
+        raise IntakeAnalysisError("Intake trip does not match the source case.")
+    rider_done = bool(case.rider_state and case.rider_state.interview_complete)
+    driver_done = bool(case.driver_state and case.driver_state.interview_complete)
+    comparison_allowed = rider_done and driver_done and case.lifecycle in {
+        "READY_FOR_ANALYSIS", "ANALYSING", "AUTO_RESOLVED", "HUMAN_REVIEW",
+    }
+    user_messages = {m.id: m.party for m in case.messages if m.sender == "user"}
+    def attributed_state(state: InterviewState | None, party: str) -> InterviewState | None:
+        if state is None:
+            return None
+        return state.model_copy(update={"facts": [f for f in state.facts if f.stated_by == party
+            and (not f.source_message_id or user_messages.get(f.source_message_id) == party)]})
+    rider_state = attributed_state(case.rider_state, "rider")
+    driver_state = attributed_state(case.driver_state, "driver")
+    statements = _build_party_statements(rider_state, driver_state)
+    context = AdvocateContextBuilder().build(source, analysis)
+    trusted = fact_values(context.facts)
+    for statement in statements:
+        for fact in statement.facts:
+            key = fact["key"].upper()
+            evidence = supporting_evidence_ids(context, key) if not analysis.analysis.contradictory_evidence else []
+            fact["evidenceStatus"] = "ALLEGED"
+            if key in trusted and evidence:
+                expected = trusted[key]
+                value = _typed_allegation(fact["value"], expected)
+                if value is not None:
+                    fact["evidenceStatus"] = "SUPPORTED_BY_EVIDENCE" if values_match(expected, value) else "CONTRADICTED_BY_EVIDENCE"
+                    fact["supportedValue"] = expected
+                    fact["evidenceIds"] = evidence
+    contradictions = _detect_contradictions(rider_state, driver_state) if comparison_allowed else []
+    for contradiction in contradictions:
+        key = contradiction.fact_key.upper()
+        evidence = supporting_evidence_ids(context, key) if not analysis.analysis.contradictory_evidence else []
+        if key in trusted and evidence and all(_typed_allegation(v, trusted[key]) is not None
+                                              for v in (contradiction.rider_claim, contradiction.driver_claim)):
+            contradiction.status = "RESOLVED_BY_EVIDENCE"
+            contradiction.supported_value = trusted[key]
+            contradiction.evidence_ids = evidence
+    unresolved = [c for c in contradictions if c.status == "DISPUTED"]
+    updates = {
+        "party_statements": statements, "party_contradictions": contradictions,
+        "intake_context": IntakeContext(
+            intake_case_id=case.id, lifecycle=case.lifecycle, rider_complete=rider_done,
+            driver_complete=driver_done, comparison_allowed=comparison_allowed,
+            party_statements=statements, party_contradictions=contradictions,
+        ),
+    }
+    if unresolved:
+        penalty = _PARTY_CONTRADICTION_PENALTY * len(unresolved)
+        updates.update({
+            "confidence": analysis.confidence.model_copy(update={
+                "overall_confidence": round(max(0.0, analysis.confidence.overall_confidence - penalty), 2),
+                "contradiction_penalty": round(analysis.confidence.contradiction_penalty + penalty, 2),
+            }),
+            "resolution_mode": "HUMAN_REVIEW",
+            "escalation_reasons": list(dict.fromkeys([*analysis.escalation_reasons, "PARTY_CONTRADICTION"])),
+        })
+    return analysis.model_copy(update=updates)
+
+
+def _typed_allegation(value: str, expected: object) -> object | None:
+    """Compare exact registered keys only; never infer facts from interview prose."""
+    if isinstance(expected, bool):
+        return {"true": True, "false": False}.get(value.strip().lower())
+    if isinstance(expected, (int, float)):
+        import math
+        try:
+            number = float(value)
+            return number if math.isfinite(number) else None
+        except ValueError:
+            return None
+    return value
+
 
 def _facts_to_dicts(facts: list[PartyFact]) -> list[dict]:
     """Expose only active, party-attributed allegations to the legacy response."""
     return [
-        {"key": f.key, "value": f.value, "statedBy": f.stated_by}
+        f.model_dump(by_alias=True)
         for f in facts
         if f.active
     ]
@@ -210,5 +266,7 @@ def _detect_contradictions(
                     fact_key=key,
                     rider_claim=rider_val,
                     driver_claim=driver_val,
+                    rider_source_message_id=next(f.source_message_id for f in reversed(rider_state.facts) if f.active and f.key.lower() == key),
+                    driver_source_message_id=next(f.source_message_id for f in reversed(driver_state.facts) if f.active and f.key.lower() == key),
                 ))
     return contradictions

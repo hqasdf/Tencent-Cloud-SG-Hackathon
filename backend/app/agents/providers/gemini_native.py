@@ -31,6 +31,9 @@ What it deliberately does not do
 from __future__ import annotations
 
 import time
+import math
+import random
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Callable
@@ -142,6 +145,11 @@ def _gemini_schema_node(node: Any) -> Any:
 
     compatible: dict[str, Any] = {}
     for keyword, value in node.items():
+        if keyword == "const":
+            # Gemini supports enum, not const. Dropping a singleton Literal
+            # silently removes constraints such as operator=EQUALS.
+            compatible["enum"] = [value]
+            continue
         if keyword not in _GEMINI_JSON_SCHEMA_KEYWORDS:
             continue
         if keyword in _GEMINI_SCHEMA_MAP_KEYWORDS:
@@ -198,6 +206,7 @@ class GeminiNativeProvider:
         name: str | None = None,
         client_factory: Callable[..., Any] | None = None,
         sleeper: Callable[[float], None] | None = None,
+        jitter: Callable[[], float] | None = None,
     ) -> None:
         if not model or not api_key:
             raise LlmProviderError(
@@ -214,6 +223,7 @@ class GeminiNativeProvider:
         self._retry_max_backoff_seconds = max(0.0, retry_max_backoff_seconds)
         self._client_factory = client_factory or _default_client_factory
         self._sleep = sleeper or time.sleep
+        self._jitter = jitter or random.random
 
     @property
     def model_name(self) -> str:
@@ -273,6 +283,7 @@ class GeminiNativeProvider:
     def complete(self, request: AgentCompletionRequest) -> LlmCompletion:
         started = time.monotonic()
         attempt = 0
+        waited = 0.0
         while True:
             attempt += 1
             try:
@@ -289,10 +300,15 @@ class GeminiNativeProvider:
             except Exception as error:  # noqa: BLE001 - cancellation/stop must propagate
                 failure = _normalise(error, self.name)
                 failure.attempts = attempt
+                failure.quota_details = [item for item in failure.quota_details
+                    if not any(self._api_key in value for value in item.values())]
                 if failure.retryable and attempt <= self._max_retries:
-                    self._sleep(self._backoff_seconds(attempt))
-                    continue
-                raise failure from error
+                    delay = self._retry_delay(failure, attempt)
+                    if delay is not None and waited + delay <= self._retry_max_backoff_seconds:
+                        self._sleep(delay)
+                        waited += delay
+                        continue
+                raise failure from None  # Never render the SDK's full upstream body in a traceback.
 
             return self._to_completion(response, started, attempt)
 
@@ -300,7 +316,16 @@ class GeminiNativeProvider:
         if self._retry_backoff_seconds <= 0:
             return 0.0
         delay = self._retry_backoff_seconds * (2 ** max(attempt - 1, 0))
-        return min(delay, self._retry_max_backoff_seconds)
+        # Add bounded jitter; never shorten a provider's minimum retry delay.
+        return min(delay * (1.0 + 0.25 * self._jitter()), self._retry_max_backoff_seconds)
+
+    def _retry_delay(self, failure: LlmProviderError, attempt: int) -> float | None:
+        recommended = failure.retry_after_seconds
+        if failure.code == ProviderErrorCode.RATE_LIMITED and recommended is None:
+            return None  # A quota window cannot be guessed from a 429.
+        if recommended is not None:
+            return max(recommended, self._backoff_seconds(attempt))
+        return self._backoff_seconds(attempt)
 
     def _to_completion(self, response: Any, started: float, attempt: int) -> LlmCompletion:
         finish_reason = _finish_reason(response)
@@ -399,6 +424,9 @@ def _normalise(error: BaseException, provider_name: str) -> LlmProviderError:
             provider=provider_name,
             retryable=retryable,
             code=code,
+            http_status=status,
+            retry_after_seconds=_retry_guidance(error),
+            quota_details=_quota_details(error) if status == 429 else [],
         )
 
     if _is_timeout(error):
@@ -424,6 +452,68 @@ def _normalise(error: BaseException, provider_name: str) -> LlmProviderError:
         retryable=True,
         code=ProviderErrorCode.NETWORK_ERROR,
     )
+
+
+def _structured_details(error: BaseException) -> list[dict]:
+    payload = getattr(error, "details", None)
+    if isinstance(payload, dict):
+        payload = payload.get("error", payload)
+        payload = payload.get("details", []) if isinstance(payload, dict) else []
+    return [item for item in payload[:16] if isinstance(item, dict)] if isinstance(payload, list) else []
+
+
+def _duration_seconds(value: object) -> float | None:
+    try:
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+(?:\.[0-9]+)?s", value):
+            seconds = float(value[:-1])
+        elif isinstance(value, dict) and ("seconds" in value or "nanos" in value):
+            seconds = float(value.get("seconds", 0)) + float(value.get("nanos", 0)) / 1e9
+        else:
+            return None
+        return seconds if math.isfinite(seconds) and seconds >= 0 else None
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _retry_guidance(error: BaseException) -> float | None:
+    delays = []
+    for item in _structured_details(error):
+        if item.get("@type") == "type.googleapis.com/google.rpc.RetryInfo":
+            delay = _duration_seconds(item.get("retryDelay"))
+            if delay is not None:
+                delays.append(delay)
+    headers = getattr(getattr(error, "response", None), "headers", None)
+    if headers is not None and hasattr(headers, "get"):
+        delay = retry_after_seconds(headers.get("Retry-After"))
+        if delay is not None:
+            delays.append(delay)
+    return max(delays) if delays else None
+
+
+def _quota_details(error: BaseException) -> list[dict[str, str]]:
+    """Keep bounded quota identifiers only; omit descriptions and dimensions."""
+    result = []
+    for item in _structured_details(error):
+        if item.get("@type") != "type.googleapis.com/google.rpc.QuotaFailure":
+            continue
+        violations = item.get("violations", [])
+        if not isinstance(violations, list):
+            continue
+        for violation in violations[:8]:
+            if not isinstance(violation, dict):
+                continue
+            safe = {}
+            patterns = {
+                "quotaMetric": r"generativelanguage\.googleapis\.com/generate_content[a-z0-9_]{0,100}",
+                "quotaId": r"GenerateContent[A-Za-z0-9_-]{1,120}",
+            }
+            for key, pattern in patterns.items():
+                value = violation.get(key)
+                if isinstance(value, str) and re.fullmatch(pattern, value) and not re.search(r"AIza|sk-|Bearer", value):
+                    safe[key] = value
+            if safe:
+                result.append(safe)
+    return result[:8]
 
 
 def _http_status(error: BaseException) -> int | None:
@@ -487,13 +577,14 @@ def retry_after_seconds(value: str | None) -> float | None:
     behaviour: an unparseable or absent header means ``None``, which the caller
     treats as "do not retry" rather than guessing a delay.
     """
-    if value is None:
+    if not isinstance(value, str):
         return None
     text = value.strip()
     if not text:
         return None
     try:
-        return max(float(text), 0.0)
+        delay = float(text)
+        return delay if math.isfinite(delay) and delay >= 0 else None
     except ValueError:
         pass
     try:

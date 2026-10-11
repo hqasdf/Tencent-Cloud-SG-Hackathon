@@ -8,8 +8,37 @@ import {
   deterministicResultLabel,
   intakeProgressLabel,
   namespaceClaimId,
-  resolutionProgress
+  resolutionProgress,
+  resolutionIntakeLabel,
+  rateLimitMessage
 } from "../src/utils/uiContracts.ts";
+import { replayProvenanceLabel } from "../src/types/replay.ts";
+
+test("quota errors explain known and unknown timing without claiming AI completion", () => {
+  assert.equal(rateLimitMessage([{ failureCode: "SERVER_ERROR" }, null]), null);
+  const known = rateLimitMessage([{ failureCode: "RATE_LIMITED", retryAfterSeconds: 5.25 },
+    { failureCode: "RATE_LIMITED", retryAfterSeconds: 60 }])!;
+  assert.match(known, /at least 60 seconds after the error/);
+  assert.match(known, /completed AI stages remain saved/);
+  assert.match(known, /code-calculated final decision remains available/);
+  assert.match(known, /AI analysis did not complete/);
+  assert.match(rateLimitMessage([{ failureCode: "RATE_LIMITED", retryAfterSeconds: NaN }])!, /Retry time is unknown/);
+});
+
+test("demo and checkpoint provenance distinguish live, replayed live and mock", () => {
+  assert.equal(replayProvenanceLabel({ source: "LIVE", reusedRoles: [] }), "LIVE");
+  assert.equal(replayProvenanceLabel({ source: "LIVE", reusedRoles: ["RIDER_ADVOCATE"] }), "REPLAYED LIVE");
+  assert.equal(replayProvenanceLabel({ source: "REPLAYED_LIVE" }), "REPLAYED LIVE");
+  assert.equal(replayProvenanceLabel({ source: "MOCK_DEMO", reusedRoles: ["JUDGE"] }), "MOCK DEMO");
+  assert.match(replayProvenanceLabel({ source: "HISTORICAL_UNKNOWN" }), /PROVENANCE UNKNOWN/);
+});
+
+test("resolution provenance distinguishes no intake, partial intake and completed comparison", () => {
+  assert.match(resolutionIntakeLabel(null), /evidence only/);
+  const partial = { comparisonAllowed: false, riderComplete: true, driverComplete: false, partyStatements: [{ facts: [{}] }] };
+  assert.match(resolutionIntakeLabel(partial), /partial intake/);
+  assert.match(resolutionIntakeLabel({ ...partial, driverComplete: true, comparisonAllowed: true }), /completed intake/);
+});
 
 test("counterfactual labels preserve inclusive and exclusive boundaries", () => {
   assert.equal(counterfactualChangeLabel("INCREASE_TO_OR_ABOVE"), "Would need to rise to at least");
@@ -35,6 +64,8 @@ test("AI intake has its own lifecycle progress", () => {
   assert.equal(intakeProgressLabel("READY_FOR_ANALYSIS"), "Complete");
   assert.equal(intakeProgressLabel("AUTO_RESOLVED"), "Complete");
   assert.equal(intakeProgressLabel("HUMAN_REVIEW"), "Complete");
+  assert.equal(intakeProgressLabel("READY_FOR_ANALYSIS", false), "In progress");
+  assert.equal(intakeProgressLabel("ANALYSING", true), "Complete");
 });
 
 test("unmet business rules are conditions, not technical failures", () => {

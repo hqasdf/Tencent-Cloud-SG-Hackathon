@@ -367,6 +367,7 @@ class RebuttalOrchestratorService:
                 conceded_target_ids=outcome.conceded_target_ids(),
                 execution=AgentCallMetadata(
                     reused=completion.reused,
+                    attempt_count=completion.attempt_count,
                     provider=completion.provider_name,
                     model=completion.model_name,
                     duration_ms=completion.duration_ms,
@@ -425,6 +426,10 @@ class RebuttalOrchestratorService:
             total_tokens=completion.total_tokens if completion else None,
             malformed_output=malformed,
             failure_code=code,
+            http_status=getattr(error, "http_status", None),
+            attempt_count=getattr(error, "attempts", getattr(completion, "attempt_count", 0)),
+            retry_after_seconds=getattr(error, "retry_after_seconds", None),
+            quota_details=getattr(error, "quota_details", []),
         )
 
 

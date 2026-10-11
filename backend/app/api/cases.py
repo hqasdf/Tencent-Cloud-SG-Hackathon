@@ -17,7 +17,8 @@ router = APIRouter(prefix="/api", tags=["cases"])
 
 
 def get_case_service() -> CaseService:
-    return CaseService(MockCaseRepository())
+    from app.api.intake import _repository
+    return CaseService(MockCaseRepository(), intake_repository=_repository)
 
 
 @router.get("/cases", response_model=list[CaseSummary])

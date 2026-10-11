@@ -48,6 +48,9 @@ class LlmProviderError(RuntimeError):
         retryable: bool = False,
         code: str = ProviderErrorCode.PROVIDER_ERROR,
         attempts: int = 1,
+        http_status: int | None = None,
+        retry_after_seconds: float | None = None,
+        quota_details: list[dict[str, str]] | None = None,
     ) -> None:
         super().__init__(message)
         self.provider = provider
@@ -57,6 +60,9 @@ class LlmProviderError(RuntimeError):
         # this because retrying burns quota, so the cost of a failure is part of
         # the comparison between models.
         self.attempts = attempts
+        self.http_status = http_status
+        self.retry_after_seconds = retry_after_seconds
+        self.quota_details = quota_details or []
 
 
 @dataclass(frozen=True)

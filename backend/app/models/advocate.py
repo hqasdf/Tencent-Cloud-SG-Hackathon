@@ -32,6 +32,47 @@ VerificationLevel = Literal[
 ]
 
 
+def _proposition_generation_schema(schema: dict) -> None:
+    """Expose verifier-required shapes without losing malformed-output auditing.
+
+    The local record remains loadable for rejection/audit of historical output.
+    Generation must satisfy one kind-specific branch; semantic truth is still
+    checked exclusively by the deterministic verifier.
+    """
+    from copy import deepcopy
+
+    required_by_kind = {
+        "FACT": ("fact", "value", "operator", "evidenceIds"),
+        "CAUSAL": ("causeFacts", "effectFact", "relationId", "evidenceIds"),
+        "POLICY_APPLICATION": ("policyRuleId", "assertedRulePassed", "evidenceIds"),
+        "ADVOCACY_POSITION": ("position",),
+    }
+    branches = []
+    for kind, required in required_by_kind.items():
+        properties = {"kind": {"type": "string", "const": kind}}
+        for name in required:
+            field = deepcopy(schema["properties"][name])
+            field.pop("default", None)
+            if "anyOf" in field:
+                field["anyOf"] = [item for item in field["anyOf"] if item.get("type") != "null"]
+            if field.get("type") == "string":
+                field["minLength"] = 1
+            if field.get("type") == "array":
+                field["minItems"] = 1
+            properties[name] = field
+        branches.append({"type": "object", "properties": properties,
+                         "required": ["kind", *required]})
+    schema["anyOf"] = branches
+
+
+def _advocate_generation_schema(schema: dict) -> None:
+    """New generation requires the version the live parser already enforces."""
+    field = schema["properties"]["contractVersion"]
+    field.pop("default", None)
+    field["anyOf"] = [item for item in field["anyOf"] if item.get("type") != "null"]
+    schema["required"].append("contractVersion")
+
+
 class ClaimProposition(AdvocateModel):
     """One atomic assertion supplied by an Advocate.
 
@@ -40,6 +81,7 @@ class ClaimProposition(AdvocateModel):
     requirements. Free-form ``claim`` text remains an audit record and is never
     the object trusted by the Judge.
     """
+    model_config = ConfigDict(populate_by_name=True, json_schema_extra=_proposition_generation_schema)
 
     proposition_id: str = Field(
         serialization_alias="propositionId", validation_alias="propositionId"
@@ -127,6 +169,7 @@ class AdvocateOutput(AdvocateModel):
     There is deliberately no `position` field: the side already expresses who is
     advocating, so a separate supports/opposes axis would be redundant.
     """
+    model_config = ConfigDict(populate_by_name=True, json_schema_extra=_advocate_generation_schema)
 
     contract_version: Literal["atomic-propositions-v2"] | None = Field(
         default=None,

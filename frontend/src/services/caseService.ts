@@ -1,4 +1,4 @@
-import type { CaseAnalysis, CaseSummary, DisputeCase } from "../types/dispute";
+import type { CaseAnalysis, CaseSummary, DisputeCase, IntakeContext } from "../types/dispute";
 import type { AdvocateRunResult } from "../types/advocate";
 import type { AuditEvent, DeterministicResolution, JudgeResult } from "../types/judge";
 import type { ReplayMetadata } from "../types/replay";
@@ -31,6 +31,7 @@ export class CaseApiError extends Error {
  * children of it, because they are computed without reference to the Judge.
  */
 export interface ResolutionRunResult {
+  intakeContext?: IntakeContext | null;
   caseId: string;
   disputeType: "route_deviation" | "no_show_charge";
   rider: AdvocateRunResult["rider"];
@@ -73,7 +74,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
-    const detail = typeof body?.detail === "string" ? body.detail : `Case API returned ${response.status}.`;
+    const structured = body?.detail as { message?: unknown } | null;
+    const detail = typeof body?.detail === "string" ? body.detail
+      : typeof structured?.message === "string" ? structured.message : `Case API returned ${response.status}.`;
     throw new CaseApiError(detail, response.status);
   }
   return response.json() as Promise<T>;
@@ -104,9 +107,10 @@ export const caseService = {
    * Kept separate from runAdvocates so the Stage 4 endpoint and its response
    * contract are untouched. A complete live run costs five model calls.
    */
-  runResolution(id: string): Promise<ResolutionRunResult> {
+  runResolution(id: string, replayMode: "NONE" | "FULL_AI" = "NONE"): Promise<ResolutionRunResult> {
     return request<ResolutionRunResult>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
-      method: "POST"
+      method: "POST",
+      ...(replayMode === "FULL_AI" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ replayMode }) } : {})
     });
   }
 };

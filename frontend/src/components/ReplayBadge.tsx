@@ -1,5 +1,5 @@
 import type { ReplayMetadata } from "../types/replay";
-import { replayedStages } from "../types/replay";
+import { replayedStages, replayProvenanceLabel } from "../types/replay";
 
 /**
  * Provenance badge for the resolution run.
@@ -21,8 +21,7 @@ export function ReplayBadge({ metadata }: { metadata: ReplayMetadata }) {
   const stages = metadata.reusedRoles?.length
     ? metadata.reusedRoles.map((role) => role.toLowerCase().replaceAll("_", " "))
     : replayedStages(metadata);
-  const label = metadata.source === "MOCK_DEMO" ? "MOCK DEMO"
-    : metadata.source === "REPLAYED_LIVE" ? "REPLAYED LIVE" : "HISTORICAL REPLAY (PROVENANCE UNKNOWN)";
+  const label = replayProvenanceLabel(metadata);
   const captured = [metadata.capturedProvider, metadata.capturedModel]
     .filter(Boolean)
     .join(" / ");

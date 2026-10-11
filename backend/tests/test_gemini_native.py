@@ -157,6 +157,7 @@ def _provider(client=None, response=None, error=None, responder=None, **kwargs):
         seen["timeout_seconds"] = timeout_seconds
         return stub
 
+    kwargs.setdefault("jitter", lambda: 0.0)
     provider = GeminiNativeProvider(
         model=MODEL,
         api_key=SECRET,

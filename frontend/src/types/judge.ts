@@ -49,6 +49,10 @@ export interface JudgeResult {
     inputTokens: number | null;
     outputTokens: number | null;
     totalTokens: number | null;
+    failureCode?: string | null;
+    retryAfterSeconds?: number | null;
+    httpStatus?: number | null;
+    attemptCount?: number;
   } | null;
 }
 

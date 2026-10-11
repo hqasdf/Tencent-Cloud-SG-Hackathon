@@ -139,12 +139,28 @@ class PartyStatement(AnalysisModel):
 
 
 class PartyContradiction(AnalysisModel):
-    fact_key: str = Field(serialization_alias="factKey")
-    rider_claim: str = Field(serialization_alias="riderClaim")
-    driver_claim: str = Field(serialization_alias="driverClaim")
+    fact_key: str = Field(serialization_alias="factKey", validation_alias="factKey")
+    rider_claim: str = Field(serialization_alias="riderClaim", validation_alias="riderClaim")
+    driver_claim: str = Field(serialization_alias="driverClaim", validation_alias="driverClaim")
+    rider_source_message_id: str | None = Field(default=None, serialization_alias="riderSourceMessageId", validation_alias="riderSourceMessageId")
+    driver_source_message_id: str | None = Field(default=None, serialization_alias="driverSourceMessageId", validation_alias="driverSourceMessageId")
+    status: Literal["DISPUTED", "RESOLVED_BY_EVIDENCE"] = "DISPUTED"
+    supported_value: str | float | int | bool | None = Field(default=None, serialization_alias="supportedValue", validation_alias="supportedValue")
+    evidence_ids: list[str] = Field(default_factory=list, serialization_alias="evidenceIds", validation_alias="evidenceIds")
+
+
+class IntakeContext(AnalysisModel):
+    intake_case_id: str = Field(serialization_alias="intakeCaseId", validation_alias="intakeCaseId")
+    lifecycle: str
+    rider_complete: bool = Field(serialization_alias="riderComplete", validation_alias="riderComplete")
+    driver_complete: bool = Field(serialization_alias="driverComplete", validation_alias="driverComplete")
+    comparison_allowed: bool = Field(serialization_alias="comparisonAllowed", validation_alias="comparisonAllowed")
+    party_statements: list[PartyStatement] = Field(default_factory=list, serialization_alias="partyStatements", validation_alias="partyStatements")
+    party_contradictions: list[PartyContradiction] = Field(default_factory=list, serialization_alias="partyContradictions", validation_alias="partyContradictions")
 
 
 class CaseAnalysisResponse(AnalysisModel):
+    intake_context: IntakeContext | None = Field(default=None, serialization_alias="intakeContext")
     case_id: str = Field(serialization_alias="caseId")
     dispute_type: Literal["route_deviation", "no_show_charge"] = Field(serialization_alias="disputeType")
     analysis: RouteDeviationAnalysis | NoShowAnalysis

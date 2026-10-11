@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.models.analysis import IntakeContext
 
 
 class AgentModel(BaseModel):
@@ -140,6 +141,7 @@ class AgentCaseContext(AgentModel):
     policy_evaluation: ContextPolicyEvaluation = Field(serialization_alias="policyEvaluation", validation_alias="policyEvaluation")
     missing_evidence_ids: list[str] = Field(serialization_alias="missingEvidenceIds", validation_alias="missingEvidenceIds")
     conflicting_evidence_ids: list[str] = Field(serialization_alias="conflictingEvidenceIds", validation_alias="conflictingEvidenceIds")
+    intake_context: IntakeContext | None = Field(default=None, serialization_alias="intakeContext", validation_alias="intakeContext", exclude_if=lambda value: value is None)
 
 
 class AgentCallMetadata(AgentModel):
@@ -171,6 +173,10 @@ class AgentCallMetadata(AgentModel):
     rejection_reasons: list[str] = Field(default_factory=list, serialization_alias="rejectionReasons", validation_alias="rejectionReasons")
     malformed_output: bool = Field(default=False, serialization_alias="malformedOutput", validation_alias="malformedOutput")
     failure_code: str | None = Field(default=None, serialization_alias="failureCode", validation_alias="failureCode")
+    http_status: int | None = Field(default=None, serialization_alias="httpStatus", validation_alias="httpStatus")
+    attempt_count: int = Field(default=0, serialization_alias="attemptCount", validation_alias="attemptCount")
+    retry_after_seconds: float | None = Field(default=None, serialization_alias="retryAfterSeconds", validation_alias="retryAfterSeconds")
+    quota_details: list[dict[str, str]] = Field(default_factory=list, serialization_alias="quotaDetails", validation_alias="quotaDetails")
 
 
 class AgentRunMetadata(AgentModel):

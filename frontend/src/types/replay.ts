@@ -42,3 +42,10 @@ export function replayedStages(metadata: ReplayMetadata): string[] {
   if (metadata.judgeReplayed) stages.push("judge");
   return stages;
 }
+
+export function replayProvenanceLabel(metadata: Pick<ReplayMetadata, "source" | "reusedRoles">): string {
+  if (metadata.source === "MOCK_DEMO") return "MOCK DEMO";
+  if (metadata.source === "REPLAYED_LIVE" || (metadata.source === "LIVE" && metadata.reusedRoles?.length)) return "REPLAYED LIVE";
+  if (metadata.source === "LIVE") return "LIVE";
+  return "HISTORICAL REPLAY (PROVENANCE UNKNOWN)";
+}

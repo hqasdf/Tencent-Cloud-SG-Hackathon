@@ -54,6 +54,10 @@ export interface RebuttalSideResult {
   concededTargetIds: string[];
   failureReason: string | null;
   execution: {
+    failureCode?: string | null;
+    retryAfterSeconds?: number | null;
+    httpStatus?: number | null;
+    attemptCount?: number;
     provider: string;
     model: string | null;
     durationMs: number;

@@ -112,6 +112,12 @@ class BaseAdvocateAgent:
         owns the single bounded repair for malformed output; this method supplies
         the parser, so the definition of "valid" stays in exactly one place.
         """
+        if context.intake_context and not context.intake_context.comparison_allowed:
+            intake = context.intake_context.model_copy(update={
+                "party_statements": [s for s in context.intake_context.party_statements if s.party == self.side.lower()],
+                "party_contradictions": [],
+            })
+            context = context.model_copy(update={"intake_context": intake})
         request = AgentCompletionRequest(
             system_prompt=self._system_prompt(),
             user_prompt=self._user_prompt(context),
@@ -156,12 +162,27 @@ class BaseAdvocateAgent:
 
     @staticmethod
     def _user_prompt(context: AgentCaseContext) -> str:
+        from app.agents.claim_verification import fact_values
+        from app.agents.semantic_registry import CAUSAL_RELATIONS
+
+        vocabulary = {
+            "factNames": sorted(fact_values(context.facts)),
+            "causalRelations": [{
+                "relationId": relation.relation_id,
+                "causeFacts": sorted(relation.cause_facts),
+                "effectFact": relation.effect_fact,
+            } for relation in CAUSAL_RELATIONS.values() if relation.dispute_type == context.dispute_type],
+        }
         return (
             "The following is the trusted case context. Every deterministic value in it is "
             "authoritative. Do not recompute anything. Produce your JSON response.\n\n"
             "<case_context>\n"
             + json.dumps(context.model_dump(by_alias=True), indent=2)
             + "\n</case_context>"
+            + "\n\nUse only the following code-owned proposition vocabulary. "
+            "It describes allowed calculations, not interview allegations.\n"
+            + "<atomic_proposition_contract>\n" + json.dumps(vocabulary)
+            + "\n</atomic_proposition_contract>"
         )
 
     def _parse(self, raw_text: str, completion: LlmCompletion | None = None) -> AdvocateOutput:
@@ -190,8 +211,15 @@ class BaseAdvocateAgent:
         try:
             output = AdvocateOutput.model_validate(payload)
         except ValidationError as error:
+            # Report paths and codes only. Never include provider values,
+            # validation inputs, URLs or error context that can contain secrets.
+            import re
+            issues = []
+            for issue in error.errors(include_input=False, include_url=False, include_context=False):
+                path = ".".join(str(part) if isinstance(part, int) or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,59}", str(part)) else "field" for part in issue["loc"])
+                issues.append(f"{path}: {issue['type']}")
             raise AdvocateAgentError(
-                f"advocate output failed schema validation: {error.error_count()} issue(s)",
+                f"advocate output failed schema validation: {error.error_count()} issue(s) ({'; '.join(issues[:8])})",
                 code=AdvocateOutputErrorCode.SCHEMA_VALIDATION_FAILED,
                 completion=completion,
             ) from error

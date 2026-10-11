@@ -35,8 +35,9 @@ export interface ResolutionCalculation { fareDifference: number; explainedFareIm
 export interface ResolutionRecommendation { ruling: string; recommendedAction: string; refundAmount: number; currency: string; calculation: ResolutionCalculation; explanation: string; counterfactualExplanation: string; }
 export interface DeterministicConfidence { evidenceCompleteness: number; policyClarity: number; factualConsistency: number; invalidEvidencePenalty: number; contradictionPenalty: number; missingDataPenalty: number; overallConfidence: number; prototypeNotice: string; }
 
-export interface PartyFactEntry { key: string; value: string; statedBy: string; }
+export interface PartyFactEntry { key: string; value: string; statedBy: string; id?: string | null; sourceMessageId?: string | null; verificationStatus?: string; evidenceStatus?: string; supportedValue?: string | number | boolean; evidenceIds?: string[]; }
 export interface PartyStatement { party: string; facts: PartyFactEntry[]; }
-export interface PartyContradiction { factKey: string; riderClaim: string; driverClaim: string; }
+export interface PartyContradiction { factKey: string; riderClaim: string; driverClaim: string; riderSourceMessageId?: string | null; driverSourceMessageId?: string | null; status?: "DISPUTED" | "RESOLVED_BY_EVIDENCE"; supportedValue?: string | number | boolean | null; evidenceIds?: string[]; }
+export interface IntakeContext { intakeCaseId: string; lifecycle: string; riderComplete: boolean; driverComplete: boolean; comparisonAllowed: boolean; partyStatements: PartyStatement[]; partyContradictions: PartyContradiction[]; }
 
-export interface CaseAnalysis { caseId: string; disputeType: DisputeType; analysis: DeterministicAnalysis; policyEvaluation: DeterministicPolicyEvaluation; resolutionRecommendation: ResolutionRecommendation; confidence: DeterministicConfidence; resolutionMode: ResolutionMode; escalationReasons: string[]; partyStatements?: PartyStatement[]; partyContradictions?: PartyContradiction[]; }
+export interface CaseAnalysis { caseId: string; disputeType: DisputeType; analysis: DeterministicAnalysis; policyEvaluation: DeterministicPolicyEvaluation; resolutionRecommendation: ResolutionRecommendation; confidence: DeterministicConfidence; resolutionMode: ResolutionMode; escalationReasons: string[]; partyStatements?: PartyStatement[]; partyContradictions?: PartyContradiction[]; intakeContext?: IntakeContext | null; }

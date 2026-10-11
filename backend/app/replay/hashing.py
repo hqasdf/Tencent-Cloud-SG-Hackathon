@@ -147,6 +147,7 @@ def _analysis_projection(case: DisputeCase, analysis: CaseAnalysisResponse) -> d
             by_alias=True, mode="json"
         ),
         "resolutionMode": analysis.resolution_mode,
+        **({"intakeContext": analysis.intake_context.model_dump(by_alias=True, mode="json")} if analysis.intake_context else {}),
         "allowedOutcomes": sorted(JUDGE_ALLOWED_OUTCOMES[case.dispute_type]),
     }
 

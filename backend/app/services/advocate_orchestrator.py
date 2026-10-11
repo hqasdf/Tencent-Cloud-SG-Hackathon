@@ -250,6 +250,7 @@ class AdvocateOrchestratorService:
                 warnings=outcome.warnings,
                 execution=AgentCallMetadata(
                     reused=completion.reused,
+                    attempt_count=completion.attempt_count,
                     provider=completion.provider_name,
                     model=completion.model_name,
                     duration_ms=completion.duration_ms,
@@ -306,6 +307,10 @@ class AdvocateOrchestratorService:
             total_tokens=completion.total_tokens if completion else None,
             malformed_output=malformed,
             failure_code=code,
+            http_status=getattr(error, "http_status", None),
+            attempt_count=getattr(error, "attempts", getattr(completion, "attempt_count", 0)),
+            retry_after_seconds=getattr(error, "retry_after_seconds", None),
+            quota_details=getattr(error, "quota_details", []),
         )
 
 
@@ -330,6 +335,10 @@ def _safe_failure_reason(error: Exception) -> str:
     instead of a generic outage message.
     """
     if isinstance(error, LlmProviderError):
+        if error.code == "RATE_LIMITED":
+            cooldown = (f" Retry no earlier than {error.retry_after_seconds:g} seconds after this error."
+                        if error.retry_after_seconds is not None else " Retry time is unknown.")
+            return "Gemini is temporarily unavailable due to rate limiting." + cooldown + " Eligible completed AI stages remain saved for compatible retries. The code-calculated final decision remains available."
         return (
             f"Agent provider unavailable ({error.provider}: {error.code}). "
             "The case analysis is unaffected."

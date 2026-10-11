@@ -62,12 +62,12 @@ export default function App() {
     }
   }
 
-  async function runResolution() {
+  async function runResolution(replayMode: "NONE" | "FULL_AI" = "NONE") {
     if (!selectedId) return;
     setResolutionRunning(true);
     setResolutionError(null);
     try {
-      const result = await caseService.runResolution(selectedId);
+      const result = await caseService.runResolution(selectedId, replayMode);
       setResolutionRun(result);
       setAdvocateRun({
         caseId: result.caseId,
@@ -91,5 +91,5 @@ export default function App() {
 
   if (loadingList) return <div className="loading">Loading RydeResolve case workspace…</div>;
   if (error && cases.length === 0) return <div className="app-state"><h1>Case API unavailable</h1><p>{error}</p><button onClick={() => window.location.reload()}>Try again</button></div>;
-  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Operations workspace</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} · {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence-first routing</b><span>Claims are checked against the case record before policy evaluation.</span></div></aside>{loadingCase ? <div className="loading">Loading case record…</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => setSelectedId(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
+  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Operations workspace</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => setSelectedId(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} · {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence-first routing</b><span>Claims are checked against the case record before policy evaluation.</span></div></aside>{loadingCase ? <div className="loading">Loading case record…</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => setSelectedId(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} onRunDemo={() => void runResolution("FULL_AI")} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
 }

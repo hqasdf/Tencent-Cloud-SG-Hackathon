@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.models.analysis import IntakeContext
 
 from app.models.advocate import (
     TrustedClaim,
@@ -451,6 +452,7 @@ class AuditEvent(JudgeModel):
 
 
 class CaseResolutionResponse(JudgeModel):
+    intake_context: IntakeContext | None = Field(default=None, serialization_alias="intakeContext", validation_alias="intakeContext")
     """The Stage 6 orchestration result.
 
     The layers are separate top-level fields on purpose: ``rider`` / ``driver``

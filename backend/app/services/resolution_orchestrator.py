@@ -251,6 +251,7 @@ class ResolutionOrchestratorService:
                 audit.record("AGENT_CHECKPOINT", role=role, outcome=event)
 
         return CaseResolutionResponse(
+            intake_context=analysis.intake_context,
             case_id=case.id,
             dispute_type=case.dispute_type,
             rider=advocate_run.rider,
@@ -460,7 +461,10 @@ class ResolutionOrchestratorService:
             recommended_outcome=None,
             failure_reason=_safe_failure_reason(error),
             execution=_completion_metadata(completion, self._settings, started).model_copy(
-                update={"failure_code": code}
+                update={"failure_code": code, "http_status": getattr(error, "http_status", None),
+                        "attempt_count": getattr(error, "attempts", getattr(completion, "attempt_count", 0)),
+                        "retry_after_seconds": getattr(error, "retry_after_seconds", None),
+                        "quota_details": getattr(error, "quota_details", [])}
             ),
         )
 
@@ -496,6 +500,7 @@ def _completion_metadata(
         )
     return AgentCallMetadata(
         reused=getattr(completion, "reused", False),
+        attempt_count=getattr(completion, "attempt_count", 0),
         provider=getattr(completion, "provider_name", settings.provider),
         model=getattr(completion, "model_name", None),
         duration_ms=getattr(completion, "duration_ms", 0),

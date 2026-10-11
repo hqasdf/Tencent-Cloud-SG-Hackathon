@@ -85,6 +85,7 @@ class AdvocateContextBuilder:
             policy_evaluation=self._policy_evaluation(analysis),
             missing_evidence_ids=missing,
             conflicting_evidence_ids=conflicting,
+            intake_context=analysis.intake_context,
         )
 
     @staticmethod

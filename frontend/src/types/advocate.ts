@@ -64,6 +64,10 @@ export interface AgentCallMetadata {
   rejectionReasons: string[];
   malformedOutput: boolean;
   failureCode: string | null;
+  httpStatus?: number | null;
+  attemptCount?: number;
+  retryAfterSeconds?: number | null;
+  quotaDetails?: Record<string, string>[];
 }
 
 export interface AdvocateSideResult {

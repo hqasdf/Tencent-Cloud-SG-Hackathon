@@ -19,7 +19,9 @@ import {
   aiReviewLabel,
   deterministicResultLabel,
   intakeProgressLabel,
-  resolutionProgress
+  resolutionProgress,
+  resolutionIntakeLabel,
+  rateLimitMessage
 } from "../utils/uiContracts";
 
 /**
@@ -58,6 +60,7 @@ export interface CaseDetailProps {
   resolutionRunning: boolean;
   resolutionError: string | null;
   onRunResolution: () => void;
+  onRunDemo?: () => void;
 }
 
 const STEPS: { title: string; short: string; summary: string }[] = [
@@ -159,6 +162,7 @@ function PartyStatementsPanel({ statements }: { statements: PartyStatement[] }) 
                   <li key={i}>
                     <code>{f.key}</code>
                     <span>{f.value}</span>
+                    <small>{labelize(f.evidenceStatus ?? "ALLEGED")} · {f.sourceMessageId ? `Source: ${f.sourceMessageId}` : "Source unavailable"}</small>
                   </li>
                 ))}
               </ul>
@@ -182,14 +186,16 @@ function PartyContradictionBanner({ contradictions }: { contradictions: PartyCon
         </div>
       </div>
       <p className="judge-boundary-note">
-        The AI intake interview detected that the rider and driver gave conflicting accounts on
-        the following points. This has lowered the confidence score and forced the case to human
-        review.
+        These are differences between party accounts, not proof of dishonesty. Code compares
+        recognized facts with trusted evidence. Unresolved differences require human review;
+        interview statements cannot change the calculated refund.
       </p>
       <div className="contradiction-list">
         {contradictions.map((c, i) => (
           <div className="contradiction-row" key={i}>
             <code>{c.factKey}</code>
+            <small>{c.status === "RESOLVED_BY_EVIDENCE" ? `Resolved by evidence: ${c.supportedValue}` : "Disputed · requires review"}</small>
+            <small>Sources: {c.riderSourceMessageId ?? "unavailable"} / {c.driverSourceMessageId ?? "unavailable"}</small>
             <div className="contradiction-claims">
               <div>
                 <small>Rider said</small>
@@ -290,24 +296,40 @@ export function CaseDetail({
   resolutionRun,
   resolutionRunning,
   resolutionError,
-  onRunResolution
+  onRunResolution,
+  onRunDemo
 }: CaseDetailProps) {
   const [openStep, setOpenStep] = useState(1);
   const [intakeCase, setIntakeCase] = useState<IntakeCase | null>(null);
+  const [intakeAnalysisError, setIntakeAnalysisError] = useState<string | null>(null);
+  const quotaMessage = rateLimitMessage(resolutionRun ? [resolutionRun.rider.execution, resolutionRun.driver.execution,
+    resolutionRun.rebuttals.rider.execution, resolutionRun.rebuttals.driver.execution, resolutionRun.judge.execution]
+    : [advocateRun?.rider.execution, advocateRun?.driver.execution]);
 
-  const intakeComplete = !!(
+  const intakeComplete = !!(intakeCase?.riderState?.interviewComplete && intakeCase?.driverState?.interviewComplete && (
     intakeCase?.lifecycle === "READY_FOR_ANALYSIS" ||
+    intakeCase?.lifecycle === "ANALYSING" ||
     intakeCase?.lifecycle === "AUTO_RESOLVED" ||
     intakeCase?.lifecycle === "HUMAN_REVIEW"
-  );
+  ));
 
   const handleIntakeChange = useCallback((ic: IntakeCase) => {
+    if (ic.sourceCaseId !== caseData.id) return;
     setIntakeCase(ic);
-  }, []);
+  }, [caseData.id]);
 
   // Extract intake analysis data (party statements + contradictions) for display
-  const partyStatements = useMemo(() => extractPartyStatements(intakeCase), [intakeCase]);
-  const partyContradictions = useMemo(() => extractPartyContradictions(intakeCase), [intakeCase]);
+  const partyStatements = useMemo(() => {
+    if (resolutionRun) return resolutionRun.intakeContext?.partyStatements ?? [];
+    const saved = extractPartyStatements(intakeCase);
+    if (saved.length) return saved;
+    return [intakeCase?.riderState, intakeCase?.driverState].flatMap(state => state ? [{
+      party: state.party, facts: state.facts.filter(f => f.active !== false)
+    }] : []);
+  }, [intakeCase, resolutionRun]);
+  const partyContradictions = useMemo(() => resolutionRun
+    ? resolutionRun.intakeContext?.partyContradictions ?? []
+    : extractPartyContradictions(intakeCase), [intakeCase, resolutionRun]);
   const intakeAnalysis = useMemo(() => extractIntakeAnalysis(intakeCase), [intakeCase]);
 
   // When the intake interviews are complete (READY_FOR_ANALYSIS), auto-run the
@@ -316,15 +338,15 @@ export function CaseDetail({
   useEffect(() => {
     if (!intakeCase || intakeCase.lifecycle !== "READY_FOR_ANALYSIS") return;
     let cancelled = false;
-    void intakeService.analyse(intakeCase.id).then(() => {
+    setIntakeAnalysisError(null);
+    void intakeService.analyse(intakeCase.id).then(async () => {
       if (cancelled) return;
       // The analysis is saved server-side; refresh the intake case to load
       // finalAnalysis with party statements and contradictions.
-      void intakeService.getCase(intakeCase.id).then((refreshed) => {
-        if (!cancelled) setIntakeCase(refreshed);
-      });
-    }).catch(() => {
-      // Analysis failure is non-fatal — the case workspace still works.
+      const refreshed = await intakeService.getCase(intakeCase.id);
+      if (!cancelled) setIntakeCase(refreshed);
+    }).catch((error: unknown) => {
+      if (!cancelled) setIntakeAnalysisError(error instanceof Error ? error.message : "Unable to review intake. Run full analysis to retry using the saved accounts.");
     });
     return () => { cancelled = true; };
   }, [intakeCase?.id, intakeCase?.lifecycle]);
@@ -333,6 +355,7 @@ export function CaseDetail({
   useEffect(() => {
     setOpenStep(1);
     setIntakeCase(null);
+    setIntakeAnalysisError(null);
   }, [caseData.id]);
 
   // When a run lands, open the first step that has new content.
@@ -457,7 +480,7 @@ export function CaseDetail({
             )}
           </span>
           <span className="workflow-progress">
-            AI Intake: <b>{intakeProgressLabel(intakeCase?.lifecycle)}</b>
+            AI Intake: <b>{intakeProgressLabel(intakeCase?.lifecycle, intakeComplete)}</b>
           </span>
         </div>
         <div className="workflow-toolbar-actions">
@@ -472,7 +495,7 @@ export function CaseDetail({
             <>
               <ReplayBadge metadata={resolutionRun.replayMetadata} />
               <ReplayInvalidBadge metadata={resolutionRun.replayMetadata} />
-              {!resolutionRun.replayMetadata.replayed && (
+              {!resolutionRun.replayMetadata.replayed && !resolutionRun.replayMetadata.reusedRoles?.length && (
                 <span className={`mode-badge ${resolutionRun.agentRun.mode}`}>
                   {resolutionRun.replayMetadata.source === "MOCK_DEMO" ? "MOCK DEMO" : "LIVE"}
                 </span>
@@ -480,13 +503,17 @@ export function CaseDetail({
             </>
           ) : advocateRun ? (
             <span className={`mode-badge ${advocateRun.agentRun.mode}`}>
-              {advocateRun.agentRun.mode === "real" ? "REAL MODEL" : "MOCK"}
+              {advocateRun.agentRun.mode === "real" ? "LIVE" : "MOCK DEMO"}
             </span>
           ) : null}
 
           <button type="button" className="wf-run" onClick={onRunResolution} disabled={resolutionRunning}>
             {resolutionRunning ? "Running analysis…" : resolutionRun ? "Retry / reuse completed work" : "Run full analysis"}
           </button>
+          {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={resolutionRunning}
+            title="Revalidate saved demonstration outputs without calling Gemini. Simulated outputs are labelled MOCK DEMO.">
+            Show saved demo (replay)
+          </button>}
 
           {/* The cheaper two-call path. Subordinate, and only offered before a
               full run exists — after that it would be a second, weaker button. */}
@@ -506,6 +533,9 @@ export function CaseDetail({
       {(resolutionError || advocateError) && (
         <p className="workflow-alert">{resolutionError ?? advocateError}</p>
       )}
+      {resolutionRun && <p className="workflow-notice" role="status">{resolutionIntakeLabel(resolutionRun.intakeContext)}</p>}
+      {quotaMessage && <p className="workflow-alert" role="alert">{quotaMessage}</p>}
+      {intakeAnalysisError && <p className="workflow-alert" role="alert">Intake review failed: {intakeAnalysisError}. Saved interviews remain available to full analysis.</p>}
 
       {/*
         One plain-language statement of what the AI half of the pipeline could

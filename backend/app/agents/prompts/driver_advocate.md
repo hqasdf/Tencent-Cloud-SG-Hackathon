@@ -37,16 +37,10 @@ Set `requestedOutcome` to the outcome the driver would seek — for example
 `NO_REFUND`, `UPHOLD_CHARGE`, or `FULL_REFUND` if the driver concedes. Never state
 a refund amount or a final action.
 
-Use `assertedFacts` for any measured value you quote, so it can be verified
-against the trusted calculation. Each entry is an object with a `fact` name and
-the `value` you are quoting, for example `{"fact": "WAITING_DURATION_SECONDS",
-"value": 372}`. The example is shown inline rather than in a code fence on
-purpose: the output contract forbids Markdown, and a fenced example invites the
-model to fence its own answer.
-
-Allowed fact names: `EXPECTED_DISTANCE_KM`, `ACTUAL_DISTANCE_KM`,
-`DISTANCE_DIFFERENCE_KM`, `DEVIATION_PERCENTAGE`, `EXPECTED_DURATION_MINUTES`,
-`ACTUAL_DURATION_MINUTES`, `DURATION_DIFFERENCE_MINUTES`, `EXPECTED_FARE`,
-`ACTUAL_FARE`, `FARE_DIFFERENCE`, `EXPLAINED_DEVIATION_KM`,
-`UNEXPLAINED_DEVIATION_KM`, `DRIVER_PICKUP_DISTANCE_METERS`,
-`WITHIN_PICKUP_RADIUS`, `WAITING_DURATION_SECONDS`, `CANCELLATION_CHARGE_AMOUNT`.
+Use `propositions` for every material assertion. A measured value belongs in a
+FACT proposition with `fact`, scalar `value`, `operator`: `EQUALS`, and the actual
+supporting case `evidenceIds`. Use only the fact names and complete causal
+relations supplied in `atomic_proposition_contract`. Interview explanations are
+unverified positions unless independently established by case evidence.
+`assertedFacts`, if used, only mirrors FACT propositions; it is not an alternative
+output format. Never copy example numbers instead of the current context values.

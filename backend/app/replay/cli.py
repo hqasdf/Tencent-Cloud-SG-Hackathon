@@ -5,6 +5,7 @@
     python -m app.replay.cli validate --case DISP-005 --stage advocates
     python -m app.replay.cli inspect --artifact path/to/advocates.json
     python -m app.replay.cli replay --case DISP-005 --mode FULL_AI --execute
+    python -m app.replay.cli mock-demo --case DISP-005 --output replay_artifacts/fresh-demo
 
 **Nothing here makes an external call unless ``--execute`` is passed.** That is
 not a convenience default; it is the same rule the rest of the pipeline follows,
@@ -12,8 +13,9 @@ applied at the boundary where it matters most. ``capture`` and ``replay`` are th
 only two subcommands that could reach a provider, and both refuse to proceed
 without the flag, printing what they *would* do and what it would cost instead.
 
-``plan``, ``validate`` and ``inspect`` never call anything. They are the three
-you can safely run while reading this file.
+``plan``, ``validate`` and ``inspect`` never call anything. ``mock-demo`` injects
+only the mock provider and revalidates a FULL_AI replay with external calls
+prohibited. It writes only into a fresh local artifact directory.
 """
 
 from __future__ import annotations
@@ -99,6 +101,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Required. Without it nothing is run.",
     )
     replay.set_defaults(handler=_cmd_replay)
+
+    demo = sub.add_parser("mock-demo", help="Prepare and reverify an explicitly MOCK demo. No network.")
+    demo.add_argument("--case", required=True)
+    demo.add_argument("--output", required=True, help="A fresh local artifact directory; existing artifacts are preserved.")
+    demo.set_defaults(handler=_cmd_mock_demo)
 
     return parser
 
@@ -273,6 +280,42 @@ def _cmd_replay(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _cmd_mock_demo(args: argparse.Namespace) -> int:
+    from app.agents.config import AgentSettings
+    from app.agents.providers.mock import MockLlmProvider
+    from app.services.resolution_orchestrator import ResolutionOrchestratorService
+
+    root = Path(args.output)
+    if root.exists():
+        print("Choose a fresh output directory; existing artifacts will not be overwritten.")
+        return 2
+    case, analysis, _ = _load_case(args.case)
+    settings = AgentSettings(mode="mock", provider="mock", max_tokens=4096)
+    service = ReplayService(store=ReplayArtifactStore(root=root), settings=settings)
+    captured = ResolutionOrchestratorService(settings=settings, provider=MockLlmProvider(),
+        replay_service=service).run(case, analysis,
+            capture_stages=frozenset({"ADVOCATES", "REBUTTALS", "JUDGE"}))
+
+    class NoLiveCalls:
+        name = "gemini_native"
+        def complete(self, request):
+            raise AssertionError("A full demo replay must never call a provider")
+
+    replay_settings = AgentSettings(mode="real", provider="gemini_native", model="gemini-3.8-flash", max_tokens=4096)
+    replayed = ResolutionOrchestratorService(settings=replay_settings, provider=NoLiveCalls(),
+        replay_service=ReplayService(store=ReplayArtifactStore(root=root), settings=replay_settings)
+    ).run(case, analysis, replay_mode="FULL_AI")
+    states = [replayed.rider.status, replayed.driver.status, replayed.rebuttals.rider.status,
+              replayed.rebuttals.driver.status, replayed.judge.status]
+    assert states[:4] == ["COMPLETE"] * 4
+    assert states[4] in {"COMPLETE", "PENDING_HUMAN_REVIEW"}
+    assert replayed.replay_metadata.source == "MOCK_DEMO"
+    assert replayed.deterministic_resolution == captured.deterministic_resolution
+    print(f"MOCK DEMO verified: {args.case}; five stages revalidated; zero live calls.")
+    print(f"Artifact directory: {root.resolve()}")
+    return 0
+
+
 def _load_case(case_id: str):
     """Load a case and its deterministic analysis through the canonical path.
 
@@ -281,8 +324,20 @@ def _load_case(case_id: str):
     """
     from app.repositories.case_repository import MockCaseRepository
     from app.services.case_service import CaseService, CaseNotFoundError
+    from app.repositories.intake_repository import DB_PATH, IntakeCaseRepository
 
-    service = CaseService(MockCaseRepository())
+    class ReadOnlyIntakeRepository(IntakeCaseRepository):
+        def _init_schema(self):
+            pass
+
+        def _conn(self):
+            import sqlite3
+            conn = sqlite3.connect(self._db_path.resolve().as_uri() + "?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+            return conn
+
+    service = CaseService(MockCaseRepository(), intake_repository=(
+        ReadOnlyIntakeRepository(DB_PATH) if DB_PATH.is_file() else None))
     try:
         case = service._load_case(case_id)
     except CaseNotFoundError:

@@ -955,6 +955,41 @@ def test_cli_plan_reports_every_mode():
     assert cli.main(["plan"]) == 0
 
 
+def test_mock_demo_cli_is_explicit_and_never_calls_gemini(monkeypatch, tmp_path, capsys):
+    from app.replay import cli
+    from app.agents.providers.gemini_native import GeminiNativeProvider
+    monkeypatch.setattr(cli, "_load_case", _load)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Demo preparation cannot call Gemini")
+    monkeypatch.setattr(GeminiNativeProvider, "complete", forbidden)
+    output = tmp_path / "demo"
+    assert cli.main(["mock-demo", "--case", ROUTE_CASE, "--output", str(output)]) == 0
+    assert "MOCK DEMO" in capsys.readouterr().out
+    files = list(output.rglob("*.json"))
+    assert len(files) == 3
+    original = {path: path.read_bytes() for path in files}
+    assert cli.main(["mock-demo", "--case", ROUTE_CASE, "--output", str(output)]) == 2
+    assert all(path.read_bytes() == data for path, data in original.items())
+
+
+def test_cli_intake_context_matches_api_without_writing_database(monkeypatch, tmp_path):
+    from app.replay import cli
+    import app.repositories.intake_repository as intake_module
+    from test_intake_resolution import make_intake
+
+    path = tmp_path / "intake.db"
+    repo = intake_module.IntakeCaseRepository(path)
+    service = CaseService(MockCaseRepository(), intake_repository=repo)
+    source = service._load_case(ROUTE_CASE)
+    make_intake(repo, source)
+    monkeypatch.setattr(intake_module, "DB_PATH", path)
+    before = path.read_bytes()
+    _, analysis, _ = cli._load_case(ROUTE_CASE)
+    assert analysis == service.get_analysis(ROUTE_CASE)
+    assert analysis.intake_context is not None
+    assert path.read_bytes() == before
+
+
 def test_replay_package_imports_no_network_client():
     """A static guarantee: replay has no way to reach the network by itself.
 
@@ -1283,6 +1318,10 @@ def test_unknown_replay_mode_is_rejected(client: TestClient):
 
 def test_replay_over_http_when_enabled(monkeypatch, tmp_path):
     """The full path a demo would take: capture locally, then replay over HTTP."""
+    from app.repositories.intake_repository import IntakeCaseRepository
+    # The HTTP path now reads persisted intake. Isolate it from a developer's
+    # real interviews so it matches this test's evidence-only capture.
+    monkeypatch.setattr("app.api.intake._repository", IntakeCaseRepository(tmp_path / "intake.db"))
     store = ReplayArtifactStore(root=tmp_path / "api_artifacts")
     case, analysis, context = _load(ROUTE_CASE)
     ResolutionOrchestratorService(
