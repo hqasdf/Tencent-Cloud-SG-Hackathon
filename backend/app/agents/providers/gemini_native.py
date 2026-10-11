@@ -288,6 +288,7 @@ class GeminiNativeProvider:
                 raise
             except Exception as error:  # noqa: BLE001 - cancellation/stop must propagate
                 failure = _normalise(error, self.name)
+                failure.attempts = attempt
                 if failure.retryable and attempt <= self._max_retries:
                     self._sleep(self._backoff_seconds(attempt))
                     continue

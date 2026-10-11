@@ -14,7 +14,7 @@ PROMPT_VERSION = "advocate_prompts_v3_atomic_propositions"
 # * 30 s, because the brief's ceiling is 30 and a request that cannot complete in
 #    that time is better failed cleanly than waited on. A longer wait does not
 #    make a struggling provider succeed; it makes the run slower to fail.
-# * 1024 output tokens, because these are typed decisions, not essays. Gemini
+# * 1024 output tokens by default, because these are typed decisions, not essays. Gemini
 #    bills thinking tokens against this same budget, so the budget has to cover
 #    the reasoning *and* the JSON — which is why the prompts ask for short
 #    evidence-grounded summaries rather than prose.
@@ -22,6 +22,8 @@ PROMPT_VERSION = "advocate_prompts_v3_atomic_propositions"
 #    model that cannot disable reasoning entirely. ReStock only needs the final
 #    structured decision; so do we.
 #
+# Native Gemini can explicitly opt into 4096 after observed MAX_TOKENS failures;
+# the default and other transports keep their original budget.
 # Changing any of these is a deliberate act with a measurement behind it. They
 # are ceilings, not targets: a stage that needs more is a prompt or schema
 # problem to diagnose, not a number to raise.
@@ -31,7 +33,10 @@ MAX_TIMEOUT_SECONDS = 30.0
 
 DEFAULT_MAX_TOKENS = 1024
 MAX_OUTPUT_TOKENS = 1024
-"""Hard ceiling for a typed agent call's generation budget."""
+"""Generation ceiling for providers other than native Gemini."""
+
+GEMINI_MAX_OUTPUT_TOKENS = 4096
+"""Opt-in native Gemini ceiling, shared by thinking and structured output."""
 
 DEFAULT_REASONING_EFFORT = "low"
 SUPPORTED_REASONING_EFFORTS = frozenset({"low", "medium", "high"})
@@ -105,7 +110,8 @@ class AgentSettings:
             ),
             temperature=_float_env("AGENT_TEMPERATURE", 0.0),
             max_tokens=_bounded_int_env(
-                "AGENT_MAX_TOKENS", DEFAULT_MAX_TOKENS, maximum=MAX_OUTPUT_TOKENS
+                "AGENT_MAX_TOKENS", DEFAULT_MAX_TOKENS,
+                maximum=(GEMINI_MAX_OUTPUT_TOKENS if provider == "gemini_native" else MAX_OUTPUT_TOKENS),
             ),
             max_retries=_int_env("AGENT_MAX_RETRIES", 0, minimum=0),
             retry_backoff_seconds=_float_env("AGENT_RETRY_BACKOFF_SECONDS", 1.0),

@@ -185,6 +185,7 @@ def _valid_advocate_json() -> str:
     return json.dumps(
         {
             "side": "RIDER",
+            "contractVersion": "atomic-propositions-v2",
             "summary": "The measured deviation is not fully explained.",
             "claims": [],
             "requestedOutcome": "NO_REFUND",
@@ -683,8 +684,51 @@ def test_retries_are_bounded_and_counted() -> None:
     with pytest.raises(LlmProviderError) as caught:
         provider.complete(_advocate_request())
 
-    assert caught.value.attempts == 1
+    assert caught.value.attempts == 3
     assert len(client.calls) == 3, "one attempt plus two bounded retries"
+
+
+def test_native_gemini_opt_in_budget_reaches_wire_config(monkeypatch) -> None:
+    from dataclasses import replace
+
+    monkeypatch.setenv("AGENT_PROVIDER", "gemini_native")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "4096")
+    settings = AgentSettings.from_environment()
+    provider, client, _ = _provider()
+    request = replace(_advocate_request(), max_tokens=settings.max_tokens)
+    provider.complete(request)
+    config = client.calls[0]["config"]
+    assert config.max_output_tokens == 4096
+    assert config.model_dump(by_alias=True, exclude_none=True)["maxOutputTokens"] == 4096
+    assert config.response_mime_type == "application/json"
+    assert config.response_json_schema
+    assert config.thinking_config.thinking_level.name == "LOW"
+
+
+def test_native_gemini_budget_remains_bounded(monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_PROVIDER", "gemini_native")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "4097")
+    with pytest.raises(AgentConfigurationError, match="must be <= 4096"):
+        AgentSettings.from_environment()
+    monkeypatch.setenv("AGENT_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("AGENT_MAX_TOKENS", "4096")
+    with pytest.raises(AgentConfigurationError, match="must be <= 1024"):
+        AgentSettings.from_environment()
+
+
+def test_transient_server_failure_then_success_counts_retry() -> None:
+    def responder(index, call):
+        if index == 1:
+            raise _api_error(503)
+        return _Response(text=_valid_advocate_json())
+
+    provider, client, _ = _provider(responder=responder, max_retries=1)
+    delays = []
+    provider._sleep = delays.append
+    completion = provider.complete(_advocate_request())
+    assert completion.attempt_count == 2
+    assert len(client.calls) == 2
+    assert delays == [1.0]
 
 
 def test_a_non_retryable_failure_is_not_retried() -> None:
@@ -878,6 +922,7 @@ def _side_aware_responder(_index, call):
         text=json.dumps(
             {
                 "side": side,
+                "contractVersion": "atomic-propositions-v2",
                 "summary": "A schema-valid argument.",
                 "claims": [],
                 "requestedOutcome": "NO_REFUND",
