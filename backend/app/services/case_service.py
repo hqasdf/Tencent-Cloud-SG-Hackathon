@@ -34,7 +34,8 @@ class CaseService:
     def list_case_summaries(self) -> list[CaseSummary]:
         summaries = []
         for raw_case in self._repository.list_cases():
-            case = self._with_calculated_display(self._validated_case(raw_case), self._analysis_with_intake(self._validated_case(raw_case)))
+            validated_case = self._validated_case(raw_case)
+            case = self._with_calculated_display(validated_case, self._analysis_with_intake(validated_case))
             summaries.append(CaseSummary(
                 id=case.id,
                 dispute_type=case.dispute_type,

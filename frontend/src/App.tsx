@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { CaseDetail } from "./components/CaseDetail";
-import { DisputeDashboard } from "./components/DisputeDashboard";
 import { CaseApiError, caseService } from "./services/caseService";
 import type { ResolutionRunResult } from "./services/caseService";
 import type { AdvocateRunResult } from "./types/advocate";
