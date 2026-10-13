@@ -85,3 +85,29 @@ test("unprefixed server variables do not enter the public-variable allowlist", (
   assert.doesNotThrow(() => validatePublicBuildEnvironment({ ...vercelMetadata,
     VERCEL: "1", VERCEL_OIDC_TOKEN: "SYNTHETIC_SERVER_ONLY", AGENT_API_KEY: "SYNTHETIC_SERVER_ONLY" }));
 });
+
+// Synthetic browser endpoint configuration, never a real deployment value.
+const observabilityMetadata = {
+  VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG: JSON.stringify({
+    analytics: { scriptSrc: "/synthetic/script.js", eventEndpoint: "/synthetic/event", viewEndpoint: "/synthetic/view" },
+    speedInsights: { scriptSrc: "/synthetic/speed.js", endpoint: "/synthetic/vitals" }
+  })
+};
+
+test("the confirmed browser observability config is permitted without relaxing API URL validation", () => {
+  assert.doesNotThrow(() => validatePublicBuildEnvironment(observabilityMetadata));
+  assert.doesNotThrow(() => validatePublicBuildEnvironment({ ...vercelMetadata, ...observabilityMetadata,
+    VITE_API_BASE_URL: "https://api.example.com" }));
+  assert.throws(() => validatePublicBuildEnvironment({ ...observabilityMetadata,
+    VITE_API_BASE_URL: "https://user:PRIVATE_CREDENTIAL@api.example.com" }),
+    error => !error.message.includes("PRIVATE_CREDENTIAL"));
+});
+
+test("observability config grants no prefix permission and rejected values stay private", () => {
+  for (const name of ["VITE_GEMINI_API_KEY", "VITE_SECRET", "VITE_TOKEN", "VITE_VERCEL_OBSERVABILITY_TOKEN",
+    "VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG_SECRET", "VITE_VERCEL_OBSERVABILITY_UNKNOWN"]) {
+    assert.throws(() => validatePublicBuildEnvironment({ ...observabilityMetadata, [name]: "PRIVATE_CREDENTIAL" }),
+      error => error.message.includes(name) && !error.message.includes("PRIVATE_CREDENTIAL") &&
+        !error.message.includes(observabilityMetadata.VITE_VERCEL_OBSERVABILITY_CLIENT_CONFIG));
+  }
+});
