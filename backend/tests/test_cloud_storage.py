@@ -48,6 +48,18 @@ def test_intake_smoke_without_importing_records(remote):
     assert repo.get_case_by_source('DISP-005') is None
 
 
+def test_intake_namespaces_do_not_share_cases_or_interviews(remote, monkeypatch):
+    first = cloud.intake_repository()
+    saved = first.create_case(source_case_id='DISP-005', trip_id='SYNTHETIC-PREVIEW')
+    first.add_message(intake_case_id=saved.id, party='rider', sender='user', content='Synthetic preview account')
+    monkeypatch.setenv('STORAGE_NAMESPACE', 'separate-production-test')
+    second = cloud.intake_repository()
+    second.initialize()
+    assert second.get_case(saved.id) is None
+    assert second.get_case_by_source('DISP-005') is None
+    assert first.get_case(saved.id).source_case_id == 'DISP-005'
+
+
 def test_competing_leases_and_fenced_stale_write(remote):
     state = cloud.SqlState()
     with state.lease('case') as old:

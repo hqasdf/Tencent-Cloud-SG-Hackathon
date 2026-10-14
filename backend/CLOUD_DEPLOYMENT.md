@@ -5,6 +5,9 @@ selects the official `libsql==0.1.11` adapter. It does not import local records.
 All policy, claim verification, Judge validation and refund decisions retain
 their existing code authority. Cloud live Gemini is disabled even if a caller
 tries to select a real provider.
+Intake table and index identifiers are also scoped by `STORAGE_NAMESPACE`, so
+preview and production cannot read each other's intake records. Selecting a new
+namespace creates additive tables; it never imports existing intake data.
 
 ## Configuration
 

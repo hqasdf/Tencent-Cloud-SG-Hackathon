@@ -280,13 +280,29 @@ def intake_repository():
     from app.repositories.intake_repository import IntakeCaseRepository
     if storage_backend() == 'sqlite':
         return IntakeCaseRepository()
+    class IntakeConnection:
+        def __init__(self, conn, namespace):
+            self.conn = conn
+            self.prefix = 'rr_intake_' + hashlib.sha256(namespace.encode()).hexdigest()[:24] + '_'
+        def sql(self, statement):
+            # Substitute only fixed repository identifiers, never user values.
+            return re.sub(r'\b(intake_cases|intake_messages|interview_states)\b',
+                          lambda match: self.prefix + match.group(0), statement)
+        def execute(self, statement, parameters=()):
+            return self.conn.execute(self.sql(statement), parameters)
+        def executescript(self, statement):
+            return self.conn.executescript(self.sql(statement))
     class TursoIntakeRepository(IntakeCaseRepository):
         def __init__(self):
-            pass  # No remote I/O during FastAPI import. Bootstrap schema explicitly.
+            self.namespace = SqlState().namespace  # No remote I/O during import.
         def initialize(self):
             self._init_schema()
-            with connection() as conn:
-                conn.executescript('CREATE INDEX IF NOT EXISTS intake_source_updated ON intake_cases(source_case_id,updated_at); CREATE INDEX IF NOT EXISTS intake_messages_case_time ON intake_messages(intake_case_id,timestamp);')
+            # Each namespace has its own table/index identifiers and foreign keys.
+            with self._conn() as conn:
+                prefix = conn.prefix
+                conn.executescript(f'CREATE INDEX IF NOT EXISTS {prefix}source_updated ON intake_cases(source_case_id,updated_at); CREATE INDEX IF NOT EXISTS {prefix}messages_case_time ON intake_messages(intake_case_id,timestamp);')
+        @contextmanager
         def _conn(self):
-            return connection()
+            with connection() as conn:
+                yield IntakeConnection(conn, self.namespace)
     return TursoIntakeRepository()

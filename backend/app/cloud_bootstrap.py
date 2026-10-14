@@ -46,7 +46,7 @@ def smoke():
     if restarted.get_case(created.id).source_case_id != run_id:
         raise ValueError('Persistence smoke failed')
     try:
-        with connection() as conn:
+        with repo._conn() as conn:
             conn.execute('UPDATE intake_cases SET trip_id=? WHERE id=?', ('SYNTHETIC-ROLLBACK', created.id))
             raise RuntimeError('synthetic rollback')
     except RuntimeError:
