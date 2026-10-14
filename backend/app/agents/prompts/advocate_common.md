@@ -48,6 +48,15 @@ For every claim, each proposition's `evidenceIds` must be a subset of its parent
 Set the parent claim's `evidenceIds` to include the union of its propositions' evidence IDs.
 Check this relationship before returning JSON; never invent evidence to satisfy it.
 
+Each claim requires non-empty `evidenceIds` and `policyRefs`. Material proposition
+citations must come from `verifiedEvidenceIds` in `atomic_proposition_contract`;
+for FACT use the corresponding `factEvidenceIds`, and for POLICY_APPLICATION use
+the corresponding `policyEvidenceIds`. Missing or conflicting records and intake
+provenance IDs cannot establish a verified proposition. An advocacy position alone
+does not qualify as a verified claim. If no material claim is supported, use the
+existing `claims: []` output and explain the limitation in `summary`; do not invent
+citations or force unsupported claims. A party's request belongs in `requestedOutcome`.
+
 ## Policy discipline
 
 6. Cite **only** the policy rules provided in the context. Use their exact rule IDs.

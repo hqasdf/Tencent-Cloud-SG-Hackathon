@@ -163,19 +163,43 @@ class BaseAdvocateAgent:
     @staticmethod
     def _user_prompt(context: AgentCaseContext) -> str:
         from app.agents.claim_verification import fact_values
-        from app.agents.semantic_registry import CAUSAL_RELATIONS
+        from app.agents.semantic_registry import CAUSAL_RELATIONS, supporting_evidence_ids
 
+        trusted = fact_values(context.facts)
+        verified_ids = sorted(item.id for item in context.evidence if item.status == "Verified")
+        fact_evidence = {fact: supporting_evidence_ids(context, fact) for fact in sorted(trusted)}
         vocabulary = {
-            "factNames": sorted(fact_values(context.facts)),
+            "factNames": sorted(trusted),
+            "verifiedEvidenceIds": verified_ids,
+            "nonVerifiedEvidenceIds": {item.id: item.status for item in context.evidence if item.status != "Verified"},
+            "factEvidenceIds": fact_evidence,
+            "policyEvidenceIds": {rule.rule_id: [e for e in rule.evidence_ids if e in verified_ids]
+                                  for rule in context.policy_evaluation.evaluated_rules},
             "causalRelations": [{
                 "relationId": relation.relation_id,
                 "causeFacts": sorted(relation.cause_facts),
                 "effectFact": relation.effect_fact,
             } for relation in CAUSAL_RELATIONS.values() if relation.dispute_type == context.dispute_type],
         }
+        # A format example is derived from the current trusted context, not a
+        # generated claim or a replacement for the model's own response.
+        example = None
+        example_fact = next((fact for fact in sorted(trusted) if fact_evidence[fact]), None)
+        if example_fact is not None and context.policy.rules:
+            citations = fact_evidence[example_fact]
+            example = {
+                "claimId": "FORMAT_C1", "claim": "A measured fact from this case.",
+                "evidenceIds": citations, "policyRefs": [context.policy.rules[0].rule_id],
+                "reasoningSummary": "Cite the typed records supporting this measured fact.",
+                "importance": "LOW", "propositions": [{
+                    "propositionId": "FORMAT_P1", "kind": "FACT", "fact": example_fact,
+                    "value": trusted[example_fact], "operator": "EQUALS", "evidenceIds": citations,
+                }],
+            }
         return (
-            "The following is the trusted case context. Every deterministic value in it is "
-            "authoritative. Do not recompute anything. Produce your JSON response.\n\n"
+            "The following case context contains code-authoritative deterministic values and "
+            "separately labelled unverified interview allegations. Do not recompute anything "
+            "or treat party statements as evidence. Produce your JSON response.\n\n"
             "<case_context>\n"
             + json.dumps(context.model_dump(by_alias=True), indent=2)
             + "\n</case_context>"
@@ -183,6 +207,17 @@ class BaseAdvocateAgent:
             "It describes allowed calculations, not interview allegations.\n"
             + "<atomic_proposition_contract>\n" + json.dumps(vocabulary)
             + "\n</atomic_proposition_contract>"
+            + "\n\nFor material propositions, use only verifiedEvidenceIds. For FACT, choose citations "
+              "from factEvidenceIds for that exact fact; an empty list means no supported factual claim. "
+              "For POLICY_APPLICATION, cite non-empty policyEvidenceIds for its exact rule. "
+              "Parent claim evidenceIds must be non-empty and contain every proposition citation. "
+              "Parent policyRefs must name supplied rules. Intake/source-message/allegation IDs are never citations."
+            + ("\n<citation_format_example>\n" + json.dumps(example)
+               + "\n</citation_format_example>\nThis illustrates one claim object's format using this case's values. "
+                 "It is not a required claim; produce only claims relevant to your role." if example else "")
+            + "\nIf no material claim is supported, return claims: [] and explain insufficient evidence "
+              "in summary. Keep requestedOutcome as your party's request; it is not a verified fact. "
+              "Do not create an uncited or advocacy-only claim to fill the list."
         )
 
     def _parse(self, raw_text: str, completion: LlmCompletion | None = None) -> AdvocateOutput:
