@@ -70,8 +70,8 @@ def send_message(intake_case_id: str, request: SendMessageRequest) -> SendMessag
     except IntakeProviderError as error:
         raise HTTPException(
             status_code=error.status_code,
-            detail={"code": error.code, "message": str(error)},
-        ) from error
+            detail=error.safe_details(),
+        ) from None
     except CheckpointBusy:
         raise HTTPException(status_code=409, detail={"code": "INTAKE_REQUEST_IN_PROGRESS", "message": "An intake action is already running."}) from None
     except CheckpointStorageError:

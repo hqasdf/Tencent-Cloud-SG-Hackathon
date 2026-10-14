@@ -23,10 +23,27 @@ from app.models.intake import IntakeExecutionMetadata, IntakeStructuredReply, Pa
 class IntakeProviderError(RuntimeError):
     """Safe error crossing the intake/provider boundary."""
 
-    def __init__(self, message: str, *, code: str, status_code: int = 503) -> None:
+    def __init__(self, message: str, *, code: str, status_code: int = 503,
+                 upstream_status: int | None = None, attempts: int = 0,
+                 retry_after_seconds: float | None = None) -> None:
         super().__init__(message)
         self.code = code
         self.status_code = status_code
+        self.upstream_status = upstream_status
+        self.attempts = attempts
+        self.retry_after_seconds = retry_after_seconds
+
+    def safe_details(self) -> dict:
+        import math
+        detail = {"code": self.code, "message": str(self)}
+        if type(self.upstream_status) is int and 100 <= self.upstream_status <= 599:
+            detail["upstreamHttpStatus"] = self.upstream_status
+        if type(self.attempts) is int and self.attempts >= 0:
+            detail["attemptCount"] = self.attempts
+        delay = self.retry_after_seconds
+        if isinstance(delay, (float, int)) and math.isfinite(delay) and delay >= 0:
+            detail["retryAfterSeconds"] = delay
+        return detail
 
 
 class IntakeOutputContractError(ModelOutputContractError):
@@ -114,8 +131,10 @@ class RegistryIntakeProvider:
             reply, completion = complete_typed(provider, request, _parse_reply)
         except LlmProviderError as error:
             raise IntakeProviderError(
-                _safe_provider_message(error.code), code=error.code
-            ) from error
+                _safe_provider_message(error.code), code=error.code,
+                upstream_status=error.http_status, attempts=error.attempts,
+                retry_after_seconds=error.retry_after_seconds,
+            ) from None
         except IntakeOutputContractError as error:
             raise IntakeProviderError(
                 "The intake provider returned an invalid structured response.",
