@@ -2,6 +2,7 @@
 import json
 import math
 import os
+import re
 import time
 
 from app.agents.config import AgentConfigurationError
@@ -55,8 +56,19 @@ def validate_live_settings(settings):
             or (settings.timeout_seconds > 30 and settings.max_retries != 0)
             or settings.retry_max_backoff_seconds > 20):
         raise AgentConfigurationError('Cloud live Gemini is disabled without explicit approval, confirmed free tier and bounded approved configuration')
+    _usage_state()
     return (_limit('CLOUD_GEMINI_DAILY_ATTEMPTS', 100),
             _limit('CLOUD_GEMINI_DAILY_TOKEN_BUDGET', 2000000))
+
+
+def _usage_state():
+    from app.cloud_storage import SqlState
+    state = SqlState()
+    namespace = os.getenv('CLOUD_GEMINI_USAGE_NAMESPACE', state.namespace)
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', namespace):
+        raise AgentConfigurationError('Invalid cloud Gemini usage namespace')
+    state.namespace = namespace
+    return state
 
 
 def reserve_attempt(request, model):
@@ -70,7 +82,7 @@ def reserve_attempt(request, model):
     prompt_bytes = len((request.system_prompt + request.user_prompt).encode()) + len(json.dumps(request.response_schema or {}).encode()) + 1024
     if prompt_bytes > 65536:
         raise LlmProviderError('Cloud AI input exceeds its permitted budget', provider='gemini_native', code=ProviderErrorCode.REQUEST_REJECTED, attempts=0)
-    state = SqlState()
+    state = _usage_state()
     cooldown = state.read('cloud-gemini', 'cooldown')
     remaining = (cooldown or {}).get('until', 0) - time.time()
     if remaining > 0:
@@ -94,7 +106,7 @@ def remember_cooldown(failure):
     if delay is None or not math.isfinite(delay) or delay < 0:
         return  # Never guess a quota/reset time.
     from app.cloud_storage import SqlState, connection
-    state = SqlState()
+    state = _usage_state()
     document = json.dumps({'until': time.time() + delay})
     with connection(autocommit=True) as conn:
         conn.execute("INSERT INTO cloud_documents VALUES(?,?,?,?) ON CONFLICT(namespace,case_id,slot) DO UPDATE SET document=excluded.document WHERE json_extract(excluded.document,'$.until')>json_extract(cloud_documents.document,'$.until')", (state.namespace, 'cloud-gemini', 'cooldown', document))

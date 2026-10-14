@@ -46,7 +46,9 @@ def validate_production() -> None:
     # A new Vercel project's first deployment may be classified as production.
     # Never fall back to unauthenticated SQLite/local defaults on that platform.
     if os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None:
-        if (os.getenv('VERCEL_ENV') != 'preview' or not production_mode()
+        approved_target = (os.getenv('VERCEL_ENV') == 'preview' or
+                           (os.getenv('VERCEL_ENV') == 'production' and os.getenv('CLOUD_PRODUCTION_APPROVED') == '1'))
+        if (not approved_target or not production_mode()
                 or os.getenv('STORAGE_BACKEND') != 'turso'):
             raise DeploymentConfigurationError('Vercel requires authenticated Turso preview configuration; production is not approved')
     if not production_mode():
@@ -82,6 +84,8 @@ def validate_production() -> None:
     settings.validate()
     if cloud and settings.mode != 'mock':
         from app.cloud_live import validate_live_settings
+        if os.getenv('VERCEL_ENV') == 'production' and not os.getenv('CLOUD_GEMINI_USAGE_NAMESPACE'):
+            raise DeploymentConfigurationError('Production live AI requires an explicit shared usage namespace')
         validate_live_settings(settings)
     if settings.mode == "mock" and settings.provider != "mock":
         raise DeploymentConfigurationError("Production mock mode requires the explicit mock provider")

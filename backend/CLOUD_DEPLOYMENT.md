@@ -208,8 +208,11 @@ needed, which is preferable to silently exceeding approval.
 1. Obtain separate approval after real live-preview and manual Opera validation.
 2. Prepare a production namespace and independent stable server signing/session
    secrets, authentication hash and Gemini allowance. Never copy local records.
-3. Review a minimal change to the current `VERCEL_ENV=preview` guard; production
-   remains deliberately rejected by the present implementation.
+3. Production requires `CLOUD_PRODUCTION_APPROVED=1`, authenticated Turso
+   configuration and exact HTTPS CORS. The default remains fail-closed.
+   For live production, set `CLOUD_GEMINI_USAGE_NAMESPACE` to the existing
+   approved validation ledger namespace. Separate data namespaces must not
+   reset generation allowances or provider cooldowns.
 4. Configure only the backend production environment with exact CORS origin
    `https://ryderesolve.vercel.app`; verify public health and authenticated APIs
    against a staged production backend before switching frontend configuration.

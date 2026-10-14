@@ -462,3 +462,52 @@ def test_actual_native_transport_contract_fits_all_five_resumable_roles(remote, 
     assert len(provider.calls) == 5
     with cloud.connection() as conn:
         assert conn.execute('SELECT attempts FROM cloud_ai_usage').fetchone()['attempts'] == 5
+
+
+def test_production_activation_requires_explicit_approval(remote, monkeypatch):
+    from app.deployment import validate_production, DeploymentConfigurationError
+    monkeypatch.setenv('VERCEL_ENV', 'production')
+    monkeypatch.setenv('APP_ENV', 'production')
+    monkeypatch.setenv('CORS_ALLOWED_ORIGINS', 'https://synthetic-demo.vercel.app')
+    with pytest.raises(DeploymentConfigurationError, match='production is not approved'):
+        validate_production()
+    monkeypatch.setenv('CLOUD_PRODUCTION_APPROVED', '1')
+    validate_production()
+    approved_live(monkeypatch)
+    with pytest.raises(DeploymentConfigurationError, match='shared usage namespace'):
+        validate_production()
+    monkeypatch.setenv('CLOUD_GEMINI_USAGE_NAMESPACE', 'synthetic-tests')
+    validate_production()
+
+
+def test_separate_production_data_preserves_shared_attempt_cap(remote, monkeypatch):
+    from app.cloud_live import reserve_attempt, remember_cooldown
+    from app.agents.provider import AgentCompletionRequest, LlmProviderError
+    approved_live(monkeypatch)
+    monkeypatch.setenv('CLOUD_GEMINI_DAILY_ATTEMPTS', '20')
+    monkeypatch.setenv('CLOUD_GEMINI_CUMULATIVE_ATTEMPTS', '20')
+    with cloud.connection() as conn:
+        conn.execute('INSERT INTO cloud_ai_usage VALUES(?,?,?,?)', ('synthetic-tests','old-day',18,0))
+    monkeypatch.setenv('STORAGE_NAMESPACE', 'production-data')
+    monkeypatch.setenv('CLOUD_GEMINI_USAGE_NAMESPACE', 'synthetic-tests')
+    request = AgentCompletionRequest(system_prompt='synthetic', user_prompt='synthetic', max_tokens=4096)
+    reserve_attempt(request, 'gemini-3.8-flash')
+    reserve_attempt(request, 'gemini-3.8-flash')
+    with pytest.raises(LlmProviderError):
+        reserve_attempt(request, 'gemini-3.8-flash')
+    with cloud.connection() as conn:
+        assert conn.execute('SELECT SUM(attempts) AS n FROM cloud_ai_usage WHERE namespace=?', ('synthetic-tests',)).fetchone()['n'] == 20
+        assert conn.execute('SELECT COUNT(*) AS n FROM cloud_ai_usage WHERE namespace=?', ('production-data',)).fetchone()['n'] == 0
+    remember_cooldown(LlmProviderError('safe',provider='gemini_native',code='RATE_LIMITED',retry_after_seconds=30))
+    assert cloud.SqlState().read('cloud-gemini','cooldown') is None
+    monkeypatch.setenv('STORAGE_NAMESPACE', 'synthetic-tests')
+    assert cloud.SqlState().read('cloud-gemini','cooldown')['until'] > 0
+
+
+@pytest.mark.parametrize('namespace', ['', '../unsafe', 'x'*65])
+def test_usage_namespace_rejects_invalid_configuration(remote, monkeypatch, namespace):
+    from app.cloud_live import validate_live_settings
+    settings = approved_live(monkeypatch)
+    monkeypatch.setenv('CLOUD_GEMINI_USAGE_NAMESPACE', namespace)
+    with pytest.raises(AgentConfigurationError, match='usage namespace'):
+        validate_live_settings(settings)
