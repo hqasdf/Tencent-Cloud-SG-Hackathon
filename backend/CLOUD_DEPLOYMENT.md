@@ -128,12 +128,14 @@ For an approved **Preview only** release, use backend-only configuration:
   disabled billing and actual model quota in Google AI Studio. This flag records
   an operator confirmation; the application cannot inspect billing from a key.
 - `AGENT_MODE=real`, `AGENT_PROVIDER=gemini_native`
-- `AGENT_MODEL=gemini-3.8-flash`, `AGENT_MAX_TOKENS=4096`
+- `AGENT_MODEL=gemini-3.5-flash-lite`, `AGENT_MAX_TOKENS=4096`
 - `AGENT_TIMEOUT_SECONDS=60`, `AGENT_MAX_RETRIES=0`
 - `AGENT_RETRY_MAX_BACKOFF_SECONDS=20`
 - `AGENT_API_KEY` from the approved private file; never a Vite variable
 - Explicit `CLOUD_GEMINI_DAILY_ATTEMPTS` and
   `CLOUD_GEMINI_DAILY_TOKEN_BUDGET`; no unlimited or inferred free quota
+- `CLOUD_GEMINI_CUMULATIVE_ATTEMPTS=16` for the approved validation; the
+  existing namespace ledger is retained and counted across UTC day boundaries
 
 Use a new logical validation namespace rather than enabling live calls on the
 working mock preview. Keep its current URL, configuration, data and deployment

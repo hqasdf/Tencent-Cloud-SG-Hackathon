@@ -47,7 +47,7 @@ def _limit(name, maximum):
 
 def validate_live_settings(settings):
     if (not live_enabled() or settings.mode != 'real' or settings.provider != 'gemini_native'
-            or settings.model != 'gemini-3.8-flash' or settings.max_tokens != 4096
+            or settings.model not in {'gemini-3.8-flash', 'gemini-3.5-flash-lite'} or settings.max_tokens != 4096
             or settings.max_retries > 1 or settings.timeout_seconds > 60
             or (settings.timeout_seconds > 30 and settings.max_retries != 0)
             or settings.retry_max_backoff_seconds > 20):
@@ -60,7 +60,7 @@ def reserve_attempt(request, model):
     from app.agents.config import AgentSettings
     from app.cloud_storage import SqlState, connection
     attempts, tokens = validate_live_settings(AgentSettings.from_environment())
-    if model != 'gemini-3.8-flash' or request.max_tokens != 4096:
+    if model != AgentSettings.from_environment().model or request.max_tokens != 4096:
         raise LlmProviderError('Unapproved cloud model or token setting', provider='gemini_native', code=ProviderErrorCode.REQUEST_REJECTED, attempts=0)
     # Reserve conservatively by UTF-8 bytes plus maximum output, including repairs
     # and transport retries. This is an application allowance, not Google's quota.
@@ -74,10 +74,12 @@ def reserve_attempt(request, model):
         raise LlmProviderError('Gemini provider cooldown is still active', provider='gemini_native', code=ProviderErrorCode.RATE_LIMITED, attempts=0, retry_after_seconds=remaining)
     day = str(int(time.time()) // 86400)
     reserved = prompt_bytes + request.max_tokens
+    cumulative = (_limit('CLOUD_GEMINI_CUMULATIVE_ATTEMPTS', 100)
+                  if os.getenv('CLOUD_GEMINI_CUMULATIVE_ATTEMPTS') else 2147483647)
     with connection(autocommit=True) as conn:
         # One statement atomically caps both counters across independent workers.
-        cursor = conn.execute('INSERT INTO cloud_ai_usage(namespace,day,attempts,tokens) SELECT ?,?,1,? WHERE ?<=? ON CONFLICT(namespace,day) DO UPDATE SET attempts=attempts+1,tokens=tokens+excluded.tokens WHERE attempts<? AND tokens+excluded.tokens<=?',
-                              (state.namespace, day, reserved, reserved, tokens, attempts, tokens))
+        cursor = conn.execute('INSERT INTO cloud_ai_usage(namespace,day,attempts,tokens) SELECT ?,?,1,? WHERE ?<=? AND (SELECT COALESCE(SUM(attempts),0) FROM cloud_ai_usage WHERE namespace=?)<? ON CONFLICT(namespace,day) DO UPDATE SET attempts=attempts+1,tokens=tokens+excluded.tokens WHERE attempts<? AND tokens+excluded.tokens<=? AND (SELECT COALESCE(SUM(attempts),0) FROM cloud_ai_usage WHERE namespace=?)<?',
+                              (state.namespace, day, reserved, reserved, tokens, state.namespace, cumulative, attempts, tokens, state.namespace, cumulative))
         if cursor.rowcount != 1:
             raise LlmProviderError('Cloud Gemini validation budget exhausted', provider='gemini_native', code=ProviderErrorCode.RATE_LIMITED, attempts=0)
 
