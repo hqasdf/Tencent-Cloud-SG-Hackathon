@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { authenticatedHeaders, clearApiSession, hasApiSession, setApiSession } from "../src/services/apiSession.ts";
 
 const compiled = ts.transpileModule(readFileSync(new URL("../src/AuthenticatedApp.tsx", import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 }
@@ -22,7 +23,10 @@ function harness(capabilities, login = async () => {}) {
     if (name === "react/jsx-runtime") return { jsx, jsxs: jsx, Fragment: "fragment" };
     if (name === "./App") return { default: workspace };
     if (name.includes("authService")) return { backendCapabilities: async () => capabilities, loginDemo: login };
-    if (name.includes("apiSession")) return { hasApiSession: () => false, clearApiSession: () => listeners.get("ryde-auth-expired")?.() };
+    if (name.includes("apiSession")) return {
+      hasApiSession: () => hasApiSession(),
+      clearApiSession: () => { clearApiSession(); listeners.get("ryde-auth-expired")?.(); }
+    };
     throw new Error(name);
   }, mod, mod.exports, fakeWindow);
   function render() { cursor = 0; effects = []; tree = mod.exports.default(); effects.forEach(fn => fn()); }
@@ -62,4 +66,28 @@ test("SQLite development retains the existing workspace without cloud sign-in", 
   const h = harness({}); await h.flush();
   assert.equal(h.nodes().find(node => node.type === h.workspace).props.cloudDemo, false);
   assert.equal(h.nodes().some(node => node.type === "form"), false);
+});
+
+test("authenticated sign-out is in the header before the desktop workspace and clears the real session", async () => {
+  setApiSession("synthetic-header-session");
+  try {
+    const h = harness({ authenticationRequired: true, liveAIEnabled: false });
+    await h.flush();
+    const nodes = h.nodes();
+    const header = nodes.find(node => node.type === "header");
+    assert.equal(header.props["aria-label"], "Demo session");
+    const button = [header.props.children].flat().find(node => node.type === "button");
+    assert.equal(button.props.children, "Sign out");
+    assert.equal(button.props.type, "button");
+    assert.equal(button.props.disabled, undefined);
+    assert.ok(nodes.indexOf(header) < nodes.findIndex(node => node.type === h.workspace));
+    button.props.onClick();
+    h.render();
+    assert.equal(hasApiSession(), false);
+    assert.deepEqual(authenticatedHeaders(), {});
+    assert.equal(h.nodes().some(node => node.type === h.workspace), false);
+    assert.equal(h.nodes().some(node => node.type === "header"), false);
+    assert.equal(h.nodes().find(node => node.type === "input").props.value, "");
+    assert.ok(h.nodes().some(node => node.type === "form"));
+  } finally { clearApiSession(); }
 });
