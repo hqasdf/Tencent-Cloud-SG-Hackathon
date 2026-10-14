@@ -5,7 +5,7 @@ import type { ResolutionRunResult } from "./services/caseService";
 import type { AdvocateRunResult } from "./types/advocate";
 import type { CaseAnalysis, CaseSummary, DisputeCase } from "./types/dispute";
 
-export default function App() {
+export default function App({ cloudDemo = false }: { cloudDemo?: boolean } = {}) {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [selectedId, setSelectedId] = useState("DISP-002");
   const [selectedCase, setSelectedCase] = useState<DisputeCase | null>(null);
@@ -84,7 +84,7 @@ export default function App() {
     setResolutionRunning(true);
     setResolutionError(null);
     try {
-      const result = await caseService.runResolution(selectedId, replayMode);
+      const result = await caseService.runResolution(selectedId, cloudDemo ? "FULL_AI" : replayMode);
       if (epoch !== selectionEpoch.current || result.caseId !== selectedId) return;
       setResolutionRun(result);
       setAdvocateRun({
@@ -98,8 +98,8 @@ export default function App() {
       });
     } catch (requestError: unknown) {
       // A failed run must not erase a result the operator already has. The
-      // error is reported alongside the previous result; the alternative —
-      // clearing it — turns a transient outage into lost work, and the
+      // error is reported alongside the previous result; the alternative â€”
+      // clearing it â€” turns a transient outage into lost work, and the
       // deterministic half of a completed run is still perfectly valid.
       if (epoch === selectionEpoch.current) setResolutionError(requestError instanceof Error ? requestError.message : "Unable to run the resolution pipeline.");
     } finally {
@@ -108,7 +108,7 @@ export default function App() {
     }
   }
 
-  if (loadingList) return <div className="loading">Loading RydeResolve case workspace…</div>;
+  if (loadingList) return <div className="loading">Loading RydeResolve case workspaceâ€¦</div>;
   if (error && cases.length === 0) return <div className="app-state"><h1>Case API unavailable</h1><p>{error}</p><button onClick={() => window.location.reload()}>Try again</button></div>;
-  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Dispute review</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => selectCase(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} · {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence first</b><span>AI claims are checked. Code decides.</span></div></aside>{loadingCase ? <div className="loading">Loading case record…</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => selectCase(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail key={selectedId} caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} onRunDemo={() => void runResolution("FULL_AI")} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
+  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Dispute review</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => selectCase(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} Â· {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence first</b><span>AI claims are checked. Code decides.</span></div></aside>{loadingCase ? <div className="loading">Loading case recordâ€¦</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => selectCase(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail cloudDemo={cloudDemo} key={selectedId} caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} onRunDemo={() => void runResolution("FULL_AI")} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
 }

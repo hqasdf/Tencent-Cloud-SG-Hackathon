@@ -22,6 +22,7 @@ import {
 } from "../utils/uiContracts";
 
 export interface CaseDetailProps {
+  cloudDemo?: boolean;
   caseData: DisputeCase;
   analysis: CaseAnalysis | null;
   advocateRun: AdvocateRunResult | null;
@@ -148,7 +149,8 @@ export function CaseDetail({
   resolutionRunning,
   resolutionError,
   onRunResolution,
-  onRunDemo
+  onRunDemo,
+  cloudDemo = false
 }: CaseDetailProps) {
   const [openStep, setOpenStep] = useState(1);
   const [intakeCase, setIntakeCase] = useState<IntakeCase | null>(null);
@@ -295,7 +297,7 @@ export function CaseDetail({
           <button type="button" className="wf-run" onClick={aiReviewComplete ? () => setOpenStep(4) : onRunResolution} disabled={busy}>{busy ? "Running analysis…" : aiReviewComplete ? "View decision" : resolutionRun ? "Retry AI review" : "Run analysis"}</button>
           <details className="more-actions"><summary>More options</summary>
             {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={busy}>View saved demo</button>}
-            {!resolutionRun && <button type="button" className="wf-run-ghost" onClick={onRunAdvocates} disabled={busy}>Advocates only</button>}
+            {!cloudDemo && !resolutionRun && <button type="button" className="wf-run-ghost" onClick={onRunAdvocates} disabled={busy}>Advocates only</button>}
             {aiReviewComplete && <button type="button" className="wf-run-ghost" onClick={onRunResolution} disabled={busy}>Run analysis again</button>}
           </details>
         </div>
@@ -304,11 +306,12 @@ export function CaseDetail({
       {quotaMessage && <p className="workflow-alert" role="alert">{quotaMessage}</p>}
       {intakeAnalysisError && <div className="workflow-alert" role="alert">Statement review failed. Saved accounts remain available.<details><summary>Error details</summary>{intakeAnalysisError}</details></div>}
       {aiIncomplete && !quotaMessage && <p className="workflow-notice" role="status">AI review is incomplete. The code-calculated decision remains available. Retry to reuse compatible saved stages.</p>}
+      {cloudDemo && <p className="workflow-notice" role="status">Protected synthetic demo. Analysis loads saved MOCK_DEMO output and checks it again. Live Gemini and AI Intake are disabled.</p>}
       <WorkflowRail steps={STEPS} stateFor={stateFor} current={openStep} onSelect={setOpenStep} />
       <div className="workflow">
         <WorkflowStep index={1} total={TOTAL_STEPS} {...STEPS[0]} state={stateFor(1)} open={openStep === 1} onToggle={() => toggle(1)} onNext={() => setOpenStep(2)}>
           <p className="judge-boundary-note">Statements are allegations until checked against evidence.</p>
-          <IntakeChatPanel sourceCaseId={caseData.id} onLifecycleChange={handleIntakeChange} />
+          {cloudDemo ? <p className="workflow-notice">Review the original synthetic accounts below. No live intake interview has been completed in this demo.</p> : <IntakeChatPanel sourceCaseId={caseData.id} onLifecycleChange={handleIntakeChange} />}
           {partyStatements.some(p => p.facts.length) && <PartyStatementsPanel statements={partyStatements} />}
           <details className="view-details"><summary>Original accounts and trip</summary><section className="two-col"><article className="panel"><h3>Rider allegation</h3><p>{caseData.riderComplaint}</p></article><article className="panel"><h3>Driver allegation</h3><p>{caseData.driverResponse}</p></article></section><p>{caseData.trip.pickup} / {caseData.trip.destination}</p><p>Quoted {money(caseData.fare.quoted, caseData.fare.currency)} / Charged {money(caseData.fare.actual, caseData.fare.currency)}</p><small>Trip {caseData.trip.tripId} / Policy {caseData.metadata.policyVersion}</small><p>Rider: {caseData.rider.name} ({caseData.rider.id}) / Driver: {caseData.driver.name} ({caseData.driver.id})</p><small>Priority {caseData.metadata.priority} / Submitted {caseData.metadata.submittedAt} / Updated {caseData.metadata.lastUpdated}</small></details>
         </WorkflowStep>

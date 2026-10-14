@@ -8,6 +8,7 @@ import type {
   SendMessageResponse,
 } from "../types/intake";
 import { resolveApiBaseUrl } from "../utils/apiConfig";
+import { authenticatedHeaders, clearApiSession } from "./apiSession";
 
 const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD,
   import.meta.env.PROD ? "" : "http://localhost:8000");
@@ -24,12 +25,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
-      headers: { "Content-Type": "application/json", Accept: "application/json", ...options?.headers },
+      signal: options?.signal ?? AbortSignal.timeout(190000),
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...authenticatedHeaders(options?.method), ...options?.headers },
     });
   } catch {
     throw new IntakeApiError("Could not reach the intake API.");
   }
   if (!response.ok) {
+    if (response.status === 401) clearApiSession();
     const body = await response.json().catch(() => null) as {
       detail?: string | { code?: string; message?: string };
     } | null;

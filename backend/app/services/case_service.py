@@ -103,6 +103,11 @@ class CaseService:
         case = self._load_case(case_id)
         analysis = self._analysis_with_intake(case)
         orchestrator = ResolutionOrchestratorService()
+        from app.cloud_storage import storage_backend
+        if storage_backend() == 'turso' and replay_mode != NO_REPLAY:
+            from app.services.agent_checkpoints import AgentCheckpointStore
+            with AgentCheckpointStore().request_lock(case_id):
+                return orchestrator.run(case, analysis, replay_mode=replay_mode, resume=False)
         return orchestrator.run(case, analysis, replay_mode=replay_mode, resume=replay_mode == NO_REPLAY)
 
     def _load_case(self, case_id: str) -> DisputeCase:

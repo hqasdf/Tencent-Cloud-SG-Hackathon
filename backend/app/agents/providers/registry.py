@@ -32,6 +32,9 @@ def get_provider(settings: AgentSettings) -> LlmProvider:
     serve a structured-output request for this model.
     """
     settings.validate()
+    from app.cloud_storage import storage_backend
+    if storage_backend() == 'turso' and settings.mode != 'mock':
+        raise AgentConfigurationError('Live Gemini is disabled for the cloud demo release')
 
     if settings.provider == "mock":
         return MockLlmProvider()

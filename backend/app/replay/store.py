@@ -126,6 +126,12 @@ def forbidden_values_in(payload: object) -> list[str]:
 class ReplayArtifactStore:
     """Reads and writes artefacts under one writable root plus a curated fallback."""
 
+    def __new__(cls, root=None, curated_root=None):
+        from app.cloud_storage import storage_backend, CloudReplayStore
+        if root is None and curated_root is None and storage_backend() == 'turso':
+            return CloudReplayStore()
+        return super().__new__(cls)
+
     def __init__(
         self,
         root: Path | str | None = None,

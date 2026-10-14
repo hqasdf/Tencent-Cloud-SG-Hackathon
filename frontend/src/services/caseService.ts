@@ -9,6 +9,7 @@ import type {
 } from "../types/rebuttal";
 import type { WorkflowState } from "../types/workflow";
 import { resolveApiBaseUrl } from "../utils/apiConfig";
+import { authenticatedHeaders, clearApiSession } from "./apiSession";
 
 const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD,
   import.meta.env.PROD ? "" : "http://localhost:8000");
@@ -69,12 +70,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: { Accept: "application/json", ...(init?.headers ?? {}) }
+      signal: init?.signal ?? AbortSignal.timeout(190000),
+      headers: { Accept: "application/json", ...authenticatedHeaders(init?.method), ...(init?.headers ?? {}) }
     });
   } catch {
-    throw new CaseApiError("RydeResolve could not reach the local case API.");
+    throw new CaseApiError("RydeResolve could not complete the API request. Saved analysis remains on the backend; requests are not automatically retried.");
   }
   if (!response.ok) {
+    if (response.status === 401) clearApiSession();
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     const structured = body?.detail as { message?: unknown } | null;
     const detail = typeof body?.detail === "string" ? body.detail

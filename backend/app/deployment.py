@@ -49,9 +49,17 @@ def validate_production() -> None:
     # Do not change permissions or contents of any existing developer data.
     os.umask(0o077)
     allowed_origins()
+    from app.cloud_storage import storage_backend, validate_cloud_config
+    cloud = storage_backend() == 'turso'
+    if cloud:
+        if not allowed_origins():
+            raise DeploymentConfigurationError('Cloud production requires an explicit frontend CORS origin')
+        validate_cloud_config()
     # Explicit paths make the persistent-volume requirement reviewable. This
     # checks availability; the deployment must actually mount durable storage.
     for key in ("INTAKE_DB_PATH", "AGENT_CHECKPOINT_DIR", "REPLAY_ARTIFACT_DIR"):
+        if cloud:
+            continue
         value = os.getenv(key, "")
         if not value or not Path(value).is_absolute():
             raise DeploymentConfigurationError(f"Production requires an absolute {key}")
@@ -66,6 +74,8 @@ def validate_production() -> None:
     from app.agents.config import AgentSettings
     settings = AgentSettings.from_environment()
     settings.validate()
+    if cloud and settings.mode != 'mock':
+        raise DeploymentConfigurationError('Cloud release requires explicit mock mode; live Gemini is not enabled')
     if settings.mode == "mock" and settings.provider != "mock":
         raise DeploymentConfigurationError("Production mock mode requires the explicit mock provider")
     if settings.mode == "real" and (settings.provider != "gemini_native"

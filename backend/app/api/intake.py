@@ -18,7 +18,8 @@ from app.services.agent_checkpoints import CheckpointBusy, CheckpointStorageErro
 router = APIRouter(prefix="/api/intake", tags=["intake"])
 
 # Shared repository instance — SQLite DB persists across requests
-_repository = IntakeCaseRepository()
+from app.cloud_storage import intake_repository
+_repository = intake_repository()
 _conversation_service = ConversationService(_repository)
 _analysis_service = IntakeAnalysisService(_repository)
 

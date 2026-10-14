@@ -40,6 +40,9 @@ class CheckpointStorageError(RuntimeError):
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
+    if hasattr(path, 'atomic_write'):
+        path.atomic_write(data)
+        return
     fd, temporary = tempfile.mkstemp(prefix=".write-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
@@ -53,6 +56,11 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 class AgentCheckpointStore:
+    def __new__(cls, root=None):
+        from app.cloud_storage import storage_backend, CloudCheckpointStore
+        if root is None and storage_backend() == 'turso':
+            return CloudCheckpointStore()
+        return super().__new__(cls)
     def __init__(self, root: Path | str | None = None):
         self.root = Path(root or os.environ.get("AGENT_CHECKPOINT_DIR") or DEFAULT_ROOT)
 
@@ -144,6 +152,8 @@ class CheckpointSession:
                     completion, reused=True, duration_ms=0, input_tokens=0,
                     output_tokens=0, total_tokens=0, attempt_count=0,
                 ))
+            except CheckpointStorageError:
+                raise  # A database outage must not purchase replacement calls.
             except Exception:  # untrusted/corrupt/stale storage is never a valid result
                 self.events[role] = "REJECTED_CHECKPOINT"
 
