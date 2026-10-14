@@ -95,7 +95,7 @@ class RebuttalAgent:
         request = AgentCompletionRequest(
             system_prompt=self._system_prompt(),
             user_prompt=self._user_prompt(context),
-            response_schema=self._output_schema,
+            response_schema=self._request_schema(context),
             temperature=self._settings.temperature,
             max_tokens=self._settings.max_tokens,
             extra_body=self._extra_body(),
@@ -109,6 +109,23 @@ class RebuttalAgent:
             self._provider, request, lambda text, done: self._parse(text, context.own_side, done)
         )
         return RebuttalArgument(output=output, completion=completion)
+
+    def _request_schema(self, context: RebuttalCaseContext) -> dict:
+        if self._provider.name != "gemini_native":
+            return self._output_schema
+        from copy import deepcopy
+        from app.agents.claim_verification import fact_values
+        schema = deepcopy(self._output_schema)
+        targets = sorted(claim.claim_id for claim in context.opposing_verified_claims)
+        if not targets:
+            schema["properties"]["responses"]["maxItems"] = 0
+            schema["properties"]["concessions"]["maxItems"] = 0
+            return schema
+        response = schema["properties"]["responses"]["items"]
+        response["properties"]["targetClaimId"]["enum"] = targets
+        schema["properties"]["concessions"]["items"] = {"type": "string", "enum": targets}
+        response["properties"]["assertedFacts"]["items"]["properties"]["fact"]["enum"] = sorted(fact_values(context.deterministic_facts))
+        return schema
 
     def _extra_body(self) -> dict[str, object]:
         if self._settings.reasoning_effort:
@@ -125,6 +142,7 @@ class RebuttalAgent:
 
     @staticmethod
     def _user_prompt(context: RebuttalCaseContext) -> str:
+        from app.agents.claim_verification import fact_values
         return (
             "The following is the trusted case record. It contains the deterministic facts, "
             "the applicable policy and its evaluation, your own verified claims, and the "
@@ -135,6 +153,10 @@ class RebuttalAgent:
             "<rebuttal_context>\n"
             + json.dumps(context.model_dump(by_alias=True), indent=2)
             + "\n</rebuttal_context>"
+            + "\nUse only these exact asserted fact names and code-owned values; if you do not "
+              "need a material assertion, leave assertedFacts empty. Do not assert interview allegations.\n"
+            + "<asserted_fact_vocabulary>\n" + json.dumps(fact_values(context.deterministic_facts))
+            + "\n</asserted_fact_vocabulary>"
         )
 
     def _parse(
