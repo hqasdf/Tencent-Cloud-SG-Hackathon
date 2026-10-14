@@ -8,6 +8,15 @@ def test_native_client_imports_in_real_subprocess():
     assert result['body'] == {'worker': True, 'nativeClientImported': True}
 
 
+def test_worker_inherits_dependencies_from_parent_import_path(monkeypatch):
+    # Vercel adds bundled _vendor dependencies to sys.path during bootstrap.
+    # They need not be present in the original PYTHONPATH environment variable.
+    import libsql
+    monkeypatch.delenv('PYTHONPATH', raising=False)
+    result = run_worker({'op': 'capability'}, 10)
+    assert result['status'] == 200
+
+
 def test_deadline_terminates_worker_and_never_retries():
     import time
     start = time.monotonic()

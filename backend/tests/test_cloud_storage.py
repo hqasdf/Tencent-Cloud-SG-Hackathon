@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,16 @@ from app.services.resolution_orchestrator import ResolutionOrchestratorService
 from app.repositories.case_repository import MockCaseRepository
 from app.services.case_service import CaseService
 from app.cloud_bootstrap import seed_demo, smoke
+
+
+def test_cloud_environment_example_respects_mock_provider_ceiling(monkeypatch):
+    from dotenv import dotenv_values
+    values = dotenv_values(Path(__file__).resolve().parents[1] / 'cloud.env.example')
+    for name in ('AGENT_MODE', 'AGENT_PROVIDER', 'AGENT_MAX_TOKENS', 'AGENT_MAX_RETRIES'):
+        monkeypatch.setenv(name, values[name])
+    settings = AgentSettings.from_environment()
+    settings.validate()
+    assert settings.mode == 'mock' and settings.max_tokens == 1024
 
 
 @pytest.fixture(params=['sqlite_contract', 'native_libsql'])

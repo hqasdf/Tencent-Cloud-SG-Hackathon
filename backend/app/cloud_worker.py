@@ -17,7 +17,10 @@ class WorkerDeadline(RuntimeError):
 def run_worker(payload, seconds=180):
     env = dict(os.environ, _RYDE_CLOUD_WORKER='1', PYTHONDONTWRITEBYTECODE='1')
     root = str(Path(__file__).resolve().parent.parent)
-    env['PYTHONPATH'] = root + os.pathsep + env.get('PYTHONPATH', '')
+    # Serverless bootstrap may add _vendor only to the parent's import path.
+    # Preserve those bundled dependencies when launching the bounded worker.
+    paths = [root, *sys.path, *env.get('PYTHONPATH', '').split(os.pathsep)]
+    env['PYTHONPATH'] = os.pathsep.join(dict.fromkeys(str(path) for path in paths if path))
     try:
         result = subprocess.run([sys.executable, '-B', '-m', 'app.cloud_worker'],
             input=json.dumps(payload), capture_output=True, text=True, timeout=seconds, env=env,

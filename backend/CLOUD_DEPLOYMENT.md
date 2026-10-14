@@ -5,6 +5,9 @@ selects the official `libsql==0.1.11` adapter. It does not import local records.
 All policy, claim verification, Judge validation and refund decisions retain
 their existing code authority. Cloud live Gemini is disabled even if a caller
 tries to select a real provider.
+The mock release uses its existing 1024-token configuration ceiling. Gemini
+Native retains its approved 4096-token configuration when separately enabled
+and validated outside this preview release.
 Intake table and index identifiers are also scoped by `STORAGE_NAMESPACE`, so
 preview and production cannot read each other's intake records. Selecting a new
 namespace creates additive tables; it never imports existing intake data.
@@ -87,7 +90,10 @@ rejects a production target until a separate production approval and release.
 Each cloud request executes in an isolated subprocess. Native stderr is captured
 and never forwarded. The SDK's two-second SQLite busy timeout is **not** an HTTP
 timeout; the enclosing worker deadline bounds network calls. A killed write has
-an unknown outcome. The backend does not automatically retry it. Mutation action
+an unknown outcome. The backend never automatically retries such writes.
+Workers inherit the parent's bundled dependency paths,
+including Vercel's `_vendor` directory, rather than assuming `PYTHONPATH` contains
+them. Mutation action
 keys are reserved durably and duplicate keys are rejected rather than replaying
 an unsafe operation. Check saved state before initiating a new action after a
 timeout. Leases expire after 330 seconds and checkpoint writes verify the owner
