@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import re
 import os
 import secrets
 import sqlite3
@@ -109,6 +111,7 @@ class CheckpointSession:
         self.directory, self.key = directory, key
         self.settings, self.provider = settings, provider
         self.events: dict[str, str] = {}
+        self.verification_details: dict[str, dict] = {}
         prompts = Path(__file__).resolve().parents[1] / "agents" / "prompts"
         self.identity = {
             "version": 2, "analysis": analysis_hash,
@@ -120,6 +123,28 @@ class CheckpointSession:
             "schemas": [model.model_json_schema() for model in (AdvocateOutput, RebuttalOutput, JudgeOutput)],
         }
 
+    def record_verification(self, role, verified_count, rejected_count, reasons):
+        # Only server-owned counts and machine codes; never model text or IDs.
+        self.verification_details[role] = {
+            "verifiedCount": int(verified_count), "rejectedCount": int(rejected_count),
+            "reasonCodes": sorted({code for code in reasons
+                                   if isinstance(code, str) and re.fullmatch(r"[A-Z_]{1,64}", code)}),
+        }
+
+    def record_event(self, role, outcome, stage):
+        self.events[role] = outcome
+        document = {"role": role, "outcome": outcome, "stage": stage,
+                    **self.verification_details.get(role, {})}
+        logging.getLogger(__name__).info("Checkpoint event", extra={"checkpoint": document})
+        # A signed, fenced diagnostic receipt is not a reusable role checkpoint.
+        # Best-effort observability must never accept output or repeat a write.
+        signature = hmac.new(self.key, canonical_json(document).encode(), hashlib.sha256).hexdigest()
+        try:
+            _atomic_write(self.directory / (role.lower() + ".checkpoint-diagnostic"),
+                          canonical_json({"document": document, "signature": signature}).encode())
+        except (OSError, CheckpointStorageError):
+            logging.getLogger(__name__).warning("Checkpoint diagnostic could not be persisted")
+
     def run(self, role, context, invoke, parse, validate):
         assert role in ROLES
         identity = hash_payload({"configuration": self.identity, "role": role,
@@ -129,7 +154,7 @@ class CheckpointSession:
             self.settings.mode == "mock" or (self.provider != "mock" and bool(self.settings.model))
         )
         if not eligible:
-            self.events[role] = "INELIGIBLE_PROVENANCE"
+            self.record_event(role, "INELIGIBLE_PROVENANCE", "PROVENANCE")
         if eligible and path.exists():
             try:
                 envelope = json.loads(path.read_text(encoding="utf-8"))
@@ -147,7 +172,7 @@ class CheckpointSession:
                 output = parse(completion.raw_text, completion)
                 if not validate(output):
                     raise ValueError("verification")
-                self.events[role] = "REUSED"
+                self.record_event(role, "REUSED", "RECOVERY")
                 return SimpleNamespace(output=output, completion=replace(
                     completion, reused=True, duration_ms=0, input_tokens=0,
                     output_tokens=0, total_tokens=0, attempt_count=0,
@@ -155,7 +180,7 @@ class CheckpointSession:
             except CheckpointStorageError:
                 raise  # A database outage must not purchase replacement calls.
             except Exception:  # untrusted/corrupt/stale storage is never a valid result
-                self.events[role] = "REJECTED_CHECKPOINT"
+                self.record_event(role, "REJECTED_CHECKPOINT", "RECOVERY")
 
         if hasattr(self, 'before_invoke'):
             self.before_invoke(role)
@@ -166,6 +191,7 @@ class CheckpointSession:
         verified = validate(argument.output)
         if eligible and completion.provider_name == self.provider and not completion.truncated and verified:
             if self.settings.mode == "real" and not completion.model_name:
+                self.record_event(role, "MODEL_MISSING", "PROVENANCE")
                 return argument
             execution = asdict(completion)
             execution.pop("raw_text")
@@ -173,18 +199,21 @@ class CheckpointSession:
                         "output": argument.output.model_dump(by_alias=True, mode="json"),
                         "execution": execution}
             if forbidden_keys_in(document) or forbidden_values_in(document):
-                self.events[role] = "CHECKPOINT_UNSAFE"
+                self.record_event(role, "CHECKPOINT_UNSAFE", "PRIVACY")
                 return argument
             signature = hmac.new(self.key, canonical_json(document).encode(), hashlib.sha256).hexdigest()
             try:
                 _atomic_write(path, canonical_json({"document": document, "signature": signature}).encode())
-                self.events[role] = "SAVED"
+                self.record_event(role, "SAVED", "PERSISTENCE")
+            except CheckpointStorageError:
+                self.record_event(role, "CHECKPOINT_WRITE_UNCERTAIN", "PERSISTENCE")
+                raise
             except OSError:
-                self.events[role] = "CHECKPOINT_WRITE_FAILED"
+                self.record_event(role, "CHECKPOINT_WRITE_FAILED", "PERSISTENCE")
         elif eligible and not verified:
-            self.events[role] = "REJECTED_OUTPUT"
+            self.record_event(role, "REJECTED_OUTPUT", "VERIFICATION")
         elif eligible and completion.provider_name != self.provider:
-            self.events[role] = "PROVIDER_MISMATCH"
+            self.record_event(role, "PROVIDER_MISMATCH", "PROVENANCE")
         return argument
 
 

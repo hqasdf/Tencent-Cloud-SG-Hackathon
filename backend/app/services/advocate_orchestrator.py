@@ -207,10 +207,17 @@ class AdvocateOrchestratorService:
         """Run one advocate in isolation. Failure never propagates outward."""
         side = agent.side
         started = time.monotonic()
+        def validate_checkpoint(output):
+            verification = self._verification.verify(output, context)
+            if checkpoints is not None:
+                checkpoints.record_verification(stage, len(verification.verified_claims),
+                    len(verification.rejected_claims), [claim.reason for claim in verification.rejected_claims])
+            return not verification.rejected_claims
+
         try:
             argument = run_checked(
                 checkpoints, stage, context, lambda: agent.argue_with_trace(context),
-                agent._parse, lambda output: not self._verification.verify(output, context).rejected_claims,
+                agent._parse, validate_checkpoint,
             )
         except (LlmProviderError, AdvocateAgentError) as error:
             _mark(pipeline, stage, "FAILED")

@@ -23,7 +23,10 @@ class StageBudget:
             saved = [key for key, event in self.session.events.items() if event in {'SAVED', 'REUSED'}]
             # Never automatically buy a replacement for an unverified stage.
             if self.session.events.get(self.attempted) != 'SAVED':
-                raise LlmProviderError('An earlier role did not produce a verified checkpoint. Continue manually after reviewing its failure.', provider=self.session.provider, code=ProviderErrorCode.REQUEST_REJECTED, attempts=0)
+                outcome = self.session.events.get(self.attempted, 'NO_ACCEPTED_CHECKPOINT')
+                allowed = {'REJECTED_OUTPUT', 'CHECKPOINT_UNSAFE', 'CHECKPOINT_WRITE_FAILED', 'CHECKPOINT_WRITE_UNCERTAIN', 'MODEL_MISSING', 'PROVIDER_MISMATCH', 'INELIGIBLE_PROVENANCE'}
+                outcome = outcome if outcome in allowed else 'NO_ACCEPTED_CHECKPOINT'
+                raise LlmProviderError('An earlier role did not produce a verified checkpoint (' + outcome + '). Continue manually after reviewing its failure.', provider=self.session.provider, code=ProviderErrorCode.REQUEST_REJECTED, attempts=0)
             raise StageDeferred(role, saved)
         self.attempted = role
 
