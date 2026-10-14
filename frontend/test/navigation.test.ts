@@ -62,6 +62,7 @@ function harness(service) {
   render();
   return {
     flush,
+    unmount: () => hooks.forEach(hook => hook?.cleanup?.()),
     panel: () => nodes(tree).find(node => node.type === CaseDetail)?.props,
     select(id) {
       nodes(tree).find(node => node.type === "button" && node.props.className?.includes("case-row")
@@ -114,4 +115,28 @@ test("duplicate or overlapping AI actions make one request and explicit replay k
   assert.deepEqual(calls, [["DISP-002", "FULL_AI"]]);
   pending.resolve(result("DISP-002")); await app.flush();
   assert.equal(app.panel().resolutionRun.caseId, "DISP-002");
+});
+
+
+test("case navigation cancels further roles from the abandoned analysis", async () => {
+  const pending = deferred(); let continuation;
+  const service = { ...baseService(), runResolution: (_id, _mode, signal) => { continuation = signal; return pending.promise; } };
+  const app = harness(service); await app.flush();
+  app.panel().onRunResolution(); await app.flush();
+  assert.equal(continuation.aborted, false);
+  app.select("DISP-005"); await app.flush();
+  assert.equal(continuation.aborted, true);
+  pending.resolve(result("DISP-002")); await app.flush();
+  assert.equal(app.panel().resolutionRun, null);
+});
+
+
+test("workspace unmount cancels subsequent roles when authentication ends", async () => {
+  const pending = deferred(); let continuation;
+  const service = { ...baseService(), runResolution: (_id, _mode, signal) => { continuation = signal; return pending.promise; } };
+  const app = harness(service); await app.flush();
+  app.panel().onRunResolution(); await app.flush();
+  app.unmount();
+  assert.equal(continuation.aborted, true);
+  pending.resolve(result("DISP-002"));
 });

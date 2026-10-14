@@ -157,6 +157,8 @@ class CheckpointSession:
             except Exception:  # untrusted/corrupt/stale storage is never a valid result
                 self.events[role] = "REJECTED_CHECKPOINT"
 
+        if hasattr(self, 'before_invoke'):
+            self.before_invoke(role)
         argument = invoke()
         completion = argument.completion
         # Never store partially rejected output: the next retry must obtain a

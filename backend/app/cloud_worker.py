@@ -76,4 +76,4 @@ if __name__ == '__main__':
         main()
     except BaseException:
         print(json.dumps({'status': 503, 'body': {'detail': {'code': 'STORAGE_UNAVAILABLE',
-              'message': 'Cloud request storage is unavailable. No live Gemini call was made.'}}}))
+              'message': 'Cloud request failed. Completed checkpoints remain saved; a provider call or write may have completed. No automatic retry was started.'}}}))

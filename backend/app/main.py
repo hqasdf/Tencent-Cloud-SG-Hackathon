@@ -27,7 +27,7 @@ app = FastAPI(title="RydeResolve Case API", version="0.2.0",
 app.add_exception_handler(RequestValidationError, redacted_validation_error)
 
 async def unavailable_storage(_request, _error):
-    return JSONResponse({'detail': {'code': 'STORAGE_UNAVAILABLE', 'message': 'Saved analysis storage is temporarily unavailable. No live call was made.'}}, status_code=503, headers={'Cache-Control': 'no-store'})
+    return JSONResponse({'detail': {'code': 'STORAGE_UNAVAILABLE', 'message': 'Saved analysis storage is temporarily unavailable. Completed checkpoints remain saved; the latest write outcome may be unknown.'}}, status_code=503, headers={'Cache-Control': 'no-store'})
 
 app.add_exception_handler(CloudStorageError, unavailable_storage)
 app.add_middleware(CloudRequestDeadline)
@@ -65,7 +65,8 @@ def health() -> dict[str, object]:
         "agents": agent_settings,
     }
     if storage_backend() == 'turso':
-        result.update(authenticationRequired=True, liveAIEnabled=False, replayEnabled=replay_api_enabled())
+        from app.cloud_live import live_enabled
+        result.update(authenticationRequired=True, liveAIEnabled=live_enabled(), replayEnabled=replay_api_enabled())
     return result
 
 

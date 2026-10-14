@@ -221,3 +221,244 @@ def test_login_rate_limit_and_expired_session(remote, monkeypatch):
     assert error.value.status_code == 429
     payload = base64.urlsafe_b64encode(json.dumps({'sub': 'demo-operator', 'exp': 0}).encode()).decode()
     assert not valid_session(payload + '.' + _sign(payload))
+
+
+def approved_live(monkeypatch):
+    for key, value in {'CLOUD_LIVE_AI_ENABLED': '1', 'GEMINI_FREE_TIER_CONFIRMED': '1',
+            'AGENT_MODE': 'real', 'AGENT_PROVIDER': 'gemini_native', 'AGENT_MODEL': 'gemini-3.8-flash',
+            'AGENT_API_KEY': 'synthetic-cloud-test-only', 'AGENT_MAX_TOKENS': '4096',
+            'AGENT_MAX_RETRIES': '1', 'CLOUD_GEMINI_DAILY_ATTEMPTS': '12',
+            'CLOUD_GEMINI_DAILY_TOKEN_BUDGET': '1000000'}.items():
+        monkeypatch.setenv(key, value)
+    return AgentSettings.from_environment()
+
+
+def test_live_gate_requires_free_tier_and_explicit_budget(remote, monkeypatch):
+    from app.cloud_live import validate_live_settings, live_enabled
+    settings = approved_live(monkeypatch)
+    validate_live_settings(settings)
+    assert live_enabled()
+    monkeypatch.setenv('GEMINI_FREE_TIER_CONFIRMED', '0')
+    with pytest.raises(AgentConfigurationError):
+        validate_live_settings(settings)
+    monkeypatch.setenv('GEMINI_FREE_TIER_CONFIRMED', '1')
+    monkeypatch.delenv('CLOUD_GEMINI_DAILY_ATTEMPTS')
+    with pytest.raises(AgentConfigurationError):
+        validate_live_settings(settings)
+
+
+def test_atomic_live_attempt_cap_and_provider_cooldown(remote, monkeypatch):
+    from app.cloud_live import reserve_attempt, remember_cooldown
+    from app.agents.provider import AgentCompletionRequest, LlmProviderError
+    approved_live(monkeypatch)
+    monkeypatch.setenv('CLOUD_GEMINI_DAILY_ATTEMPTS', '2')
+    request = AgentCompletionRequest(system_prompt='synthetic', user_prompt='synthetic', max_tokens=4096)
+    def attempt(_):
+        try:
+            reserve_attempt(request, 'gemini-3.8-flash')
+            return True
+        except LlmProviderError:
+            return False
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert sum(pool.map(attempt, range(4))) == 2
+    monkeypatch.setenv('CLOUD_GEMINI_DAILY_ATTEMPTS', '12')
+    remember_cooldown(LlmProviderError('safe', provider='gemini_native', code='RATE_LIMITED', retry_after_seconds=30))
+    with pytest.raises(LlmProviderError) as error:
+        reserve_attempt(request, 'gemini-3.8-flash')
+    assert error.value.attempts == 0 and error.value.retry_after_seconds > 0
+
+
+def test_cloud_live_token_cap_blocks_before_transport(remote, monkeypatch):
+    from app.cloud_live import reserve_attempt
+    from app.agents.provider import AgentCompletionRequest, LlmProviderError
+    approved_live(monkeypatch)
+    monkeypatch.setenv('CLOUD_GEMINI_DAILY_TOKEN_BUDGET', '4096')
+    with pytest.raises(LlmProviderError) as error:
+        reserve_attempt(AgentCompletionRequest(system_prompt='synthetic', user_prompt='synthetic', max_tokens=4096), 'gemini-3.8-flash')
+    assert error.value.attempts == 0
+
+
+def test_five_roles_resume_one_per_request_without_repeat_calls(remote, monkeypatch):
+    from dataclasses import replace
+    from app.cloud_live import StageDeferred
+    settings = approved_live(monkeypatch)
+    class SyntheticNative:
+        name = 'gemini_native'
+        def __init__(self):
+            self.roles = []
+        def complete(self, request):
+            role = request.metadata.get('role', 'advocate')
+            self.roles.append('JUDGE' if role == 'judge' else request.metadata['side'] + '_' + role.upper())
+            response = MockLlmProvider().complete(request)
+            return replace(response, provider_name=self.name, model_name='gemini-3.8-flash')
+    provider = SyntheticNative()
+    service = CaseService(MockCaseRepository())
+    case = service._load_case('DISP-005')
+    analysis = service.get_analysis('DISP-005')
+    for index in range(5):
+        runner = ResolutionOrchestratorService(settings=settings, provider=provider)
+        before = len(provider.roles)
+        if index < 4:
+            with pytest.raises(StageDeferred) as pending:
+                runner.run(case, analysis, resume=True)
+            assert len(pending.value.saved_roles) == index + 1
+        else:
+            result = runner.run(case, analysis, resume=True)
+            assert result.judge.status == 'COMPLETE'
+            assert result.deterministic_resolution.recommended_action == 'NO_REFUND'
+        assert len(provider.roles) == before + 1
+    assert len(set(provider.roles)) == 5
+    result = ResolutionOrchestratorService(settings=settings, provider=provider).run(case, analysis, resume=True)
+    assert len(provider.roles) == 5
+    assert len(result.replay_metadata.reused_roles) == 5
+
+
+def test_stage_budget_never_continues_unverified_output(remote):
+    from types import SimpleNamespace
+    from app.cloud_live import StageBudget
+    session = SimpleNamespace(events={'RIDER_ADVOCATE': 'REUSED'}, provider='gemini_native')
+    budget = StageBudget(session)
+    budget.before_invoke('DRIVER_ADVOCATE')
+    session.events['DRIVER_ADVOCATE'] = 'REJECTED_OUTPUT'
+    from app.agents.provider import LlmProviderError
+    with pytest.raises(LlmProviderError) as blocked:
+        budget.before_invoke('RIDER_REBUTTAL')
+    assert blocked.value.attempts == 0
+
+
+
+def test_native_transport_budget_counts_the_single_retry(remote, monkeypatch):
+    from dataclasses import replace
+    from test_gemini_native import _provider, _advocate_request, _Response
+    from test_gemini_rate_limits import quota_error
+    approved_live(monkeypatch)
+    def respond(index, _call):
+        if index == 1:
+            raise quota_error(status=503)
+        return _Response()
+    provider, client, _ = _provider(responder=respond, max_retries=1)
+    provider._sleep = lambda _delay: None
+    result = provider.complete(replace(_advocate_request(), max_tokens=4096))
+    assert result.attempt_count == 2 and len(client.calls) == 2
+    with cloud.connection() as conn:
+        row = conn.execute('SELECT attempts FROM cloud_ai_usage').fetchone()
+    assert row['attempts'] == 2
+
+
+def test_quota_cooldown_cannot_be_shortened_and_blocks_next_transport(remote, monkeypatch):
+    from dataclasses import replace
+    from app.cloud_live import remember_cooldown
+    from app.agents.provider import LlmProviderError
+    from test_gemini_native import _provider, _advocate_request
+    from test_gemini_rate_limits import quota_error
+    approved_live(monkeypatch)
+    provider, client, _ = _provider(error=quota_error('60s'), max_retries=1)
+    with pytest.raises(LlmProviderError) as failed:
+        provider.complete(replace(_advocate_request(), max_tokens=4096))
+    assert failed.value.retry_after_seconds == 60 and len(client.calls) == 1
+    before = cloud.SqlState().read('cloud-gemini', 'cooldown')['until']
+    remember_cooldown(LlmProviderError('safe', provider='gemini_native', code='RATE_LIMITED', retry_after_seconds=1))
+    assert cloud.SqlState().read('cloud-gemini', 'cooldown')['until'] == before
+    with pytest.raises(LlmProviderError) as blocked:
+        provider.complete(replace(_advocate_request(), max_tokens=4096))
+    assert blocked.value.attempts == 0 and len(client.calls) == 1
+
+
+def test_live_configuration_preserves_honest_mock_replay_fallback(remote, monkeypatch):
+    monkeypatch.setenv('REPLAY_API_ENABLED', '1')
+    seed_demo('DISP-005')
+    approved_live(monkeypatch)
+    result = CaseService(MockCaseRepository()).get_resolution_run('DISP-005', replay_mode='FULL_AI')
+    assert result.replay_metadata.source == 'MOCK_DEMO'
+    assert result.deterministic_resolution.recommended_action == 'NO_REFUND'
+    with cloud.connection() as conn:
+        assert conn.execute('SELECT count(*) AS n FROM cloud_ai_usage').fetchone()['n'] == 0
+
+
+def test_authenticated_resolution_endpoint_returns_bounded_continuation(remote, monkeypatch):
+    from app.main import app
+    from app.api.cases import get_case_service
+    from app.cloud_live import StageDeferred
+    class Service:
+        def get_resolution_run(self, *_args, **_kwargs):
+            raise StageDeferred('DRIVER_ADVOCATE', ['RIDER_ADVOCATE'])
+    app.dependency_overrides[get_case_service] = lambda: Service()
+    try:
+        with TestClient(app) as client:
+            assert client.post('/api/cases/DISP-005/resolution/run').status_code == 401
+            result = client.post('/api/cases/DISP-005/resolution/run', headers={'Authorization': 'Bearer ' + issue_session(), 'Idempotency-Key': 'synthetic-continuation-123456'})
+        assert result.status_code == 202
+        assert result.json()['savedRoles'] == ['RIDER_ADVOCATE']
+        assert '202' in app.openapi()['paths']['/api/cases/{case_id}/resolution/run']['post']['responses']
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_uncertain_budget_write_never_enters_provider_retry_loop(remote, monkeypatch):
+    from dataclasses import replace
+    from app import cloud_live
+    from test_gemini_native import _provider, _advocate_request
+    approved_live(monkeypatch)
+    reservations = []
+    reserve = cloud_live.reserve_attempt
+    def uncertain(*args):
+        reservations.append(True)
+        reserve(*args)  # Simulate loss of acknowledgement after the commit.
+        raise cloud.CloudStorageError('REMOTE_STORAGE_UNAVAILABLE')
+    monkeypatch.setattr(cloud_live, 'reserve_attempt', uncertain)
+    provider, client, _ = _provider(max_retries=1)
+    waits = []
+    provider._sleep = waits.append
+    with pytest.raises(cloud.CloudStorageError):
+        provider.complete(replace(_advocate_request(), max_tokens=4096))
+    assert len(reservations) == 1
+    assert client.calls == [] and waits == []
+    with cloud.connection() as conn:
+        assert conn.execute('SELECT attempts FROM cloud_ai_usage').fetchone()['attempts'] == 1
+
+
+def test_cloud_mock_standalone_advocates_remain_supported(remote):
+    result = CaseService(MockCaseRepository()).get_advocate_run('DISP-005')
+    assert result.rider.status == result.driver.status == 'COMPLETE'
+
+
+def test_cloud_live_standalone_advocates_cannot_bypass_stage_budget(remote, monkeypatch):
+    approved_live(monkeypatch)
+    with pytest.raises(AgentConfigurationError, match='checkpointed'):
+        CaseService(MockCaseRepository()).get_advocate_run('DISP-005')
+
+
+def test_actual_native_transport_contract_fits_all_five_resumable_roles(remote, monkeypatch):
+    from types import SimpleNamespace
+    from app.agents.providers.gemini_native import GeminiNativeProvider
+    from app.cloud_live import StageDeferred
+    from test_gemini_native import _Response
+    settings = approved_live(monkeypatch)
+    class OfflineNative(GeminiNativeProvider):
+        def __init__(self):
+            self.calls = []
+            super().__init__(model=settings.model, api_key='synthetic-native-audit-only', max_retries=1,
+                             client_factory=lambda **_kwargs: SimpleNamespace(models=SimpleNamespace(generate_content=self.generate)))
+        def complete(self, request):
+            self.current = request
+            return super().complete(request)
+        def generate(self, *, model, contents, config):
+            assert model == settings.model and contents == self.current.user_prompt
+            assert config.max_output_tokens == 4096 and config.response_json_schema
+            self.calls.append(self.current)
+            return _Response(MockLlmProvider().complete(self.current).raw_text)
+    provider = OfflineNative()
+    service = CaseService(MockCaseRepository())
+    case, analysis = service._load_case('DISP-005'), service.get_analysis('DISP-005')
+    for index in range(5):
+        runner = ResolutionOrchestratorService(settings=settings, provider=provider)
+        if index < 4:
+            with pytest.raises(StageDeferred):
+                runner.run(case, analysis, resume=True)
+        else:
+            result = runner.run(case, analysis, resume=True)
+            assert result.judge.status == 'COMPLETE'
+            assert result.deterministic_resolution.recommended_action == 'NO_REFUND'
+    assert len(provider.calls) == 5
+    with cloud.connection() as conn:
+        assert conn.execute('SELECT attempts FROM cloud_ai_usage').fetchone()['attempts'] == 5

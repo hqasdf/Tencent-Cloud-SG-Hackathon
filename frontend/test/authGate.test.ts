@@ -91,3 +91,16 @@ test("authenticated sign-out is in the header before the desktop workspace and c
     assert.ok(h.nodes().some(node => node.type === "form"));
   } finally { clearApiSession(); }
 });
+
+
+test("approved live cloud restores intake while retaining authenticated workspace and sign-out", async () => {
+  setApiSession("synthetic-live-cloud-session");
+  try {
+    const h = harness({ authenticationRequired: true, liveAIEnabled: true });
+    await h.flush();
+    const workspace = h.nodes().find(node => node.type === h.workspace);
+    assert.equal(workspace.props.cloudDemo, false);
+    assert.equal(workspace.props.cloudHosted, true);
+    assert.ok(h.nodes().some(node => node.props?.className === "demo-signout"));
+  } finally { clearApiSession(); }
+});

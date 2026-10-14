@@ -28,5 +28,5 @@ export default function AuthenticatedApp() {
       .catch((failure: unknown) => { setPassword(""); setError(failure instanceof Error ? failure.message : "Sign-in failed."); })
       .finally(() => setBusy(false));
   }}><label htmlFor="demo-password">Demo password</label><input id="demo-password" type="password" autoComplete="current-password" maxLength={256} required value={password} onChange={event => setPassword(event.target.value)} /><button disabled={busy}>{busy ? "Signing inâ€¦" : "Sign in"}</button></form>{error && <p role="alert">{error}</p>}</div>;
-  return <>{capabilities.authenticationRequired && <header className="demo-session-header" aria-label="Demo session"><span>RydeResolve demo workspace</span><button type="button" className="demo-signout" onClick={clearApiSession}>Sign out</button></header>}<App cloudDemo={capabilities.authenticationRequired === true && capabilities.liveAIEnabled === false} /></>;
+  return <>{capabilities.authenticationRequired && <header className="demo-session-header" aria-label="Demo session"><span>RydeResolve demo workspace</span><button type="button" className="demo-signout" onClick={clearApiSession}>Sign out</button></header>}<App cloudHosted={capabilities.authenticationRequired === true} cloudDemo={capabilities.authenticationRequired === true && capabilities.liveAIEnabled === false} /></>;
 }

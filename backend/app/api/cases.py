@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.agents.config import AgentConfigurationError
+from app.cloud_live import StageDeferred
 from app.models.advocate import AdvocateRunResponse
 from app.models.analysis import CaseAnalysisResponse
 from app.models.case import CaseSummary, DisputeCase
@@ -65,7 +66,8 @@ def run_case_advocates(
         raise HTTPException(status_code=503, detail={"code": "CHECKPOINT_STORAGE_UNAVAILABLE", "message": "Analysis request storage is unavailable."}) from None
 
 
-@router.post("/cases/{case_id}/resolution/run", response_model=CaseResolutionResponse)
+@router.post("/cases/{case_id}/resolution/run", response_model=CaseResolutionResponse,
+             responses={202: {"description": "Verified role saved; bounded continuation required."}})
 def run_case_resolution(
     case_id: str,
     request: ResolutionRunRequest | None = None,
@@ -109,6 +111,9 @@ def run_case_resolution(
         )
     try:
         return service.get_resolution_run(case_id, replay_mode=mode)
+    except StageDeferred as error:
+        from starlette.responses import JSONResponse
+        return JSONResponse({'resumeRequired': True, 'savedRoles': error.saved_roles, 'nextRole': error.role, 'message': 'Verified stages are saved. Continue analysis to run the next role.'}, status_code=202)
     except CheckpointBusy as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except CheckpointStorageError as error:

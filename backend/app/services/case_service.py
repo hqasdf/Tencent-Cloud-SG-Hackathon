@@ -77,6 +77,11 @@ class CaseService:
 
         case = self._load_case(case_id)
         analysis = self._analysis_with_intake(case)
+        from app.cloud_storage import storage_backend
+        if storage_backend() == 'turso':
+            from app.agents.config import AgentConfigurationError, AgentSettings
+            if AgentSettings.from_environment().mode == 'real':
+                raise AgentConfigurationError('Cloud live advocates must use the checkpointed full resolution endpoint')
         orchestrator = AdvocateOrchestratorService()
         from app.services.agent_checkpoints import AgentCheckpointStore
         # Same case lock as full resolution; the standalone endpoint must not

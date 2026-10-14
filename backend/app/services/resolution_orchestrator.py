@@ -39,6 +39,8 @@ untouched.
 
 from __future__ import annotations
 
+from app.cloud_live import StageDeferred
+
 import time
 
 from app.agents.config import AgentSettings
@@ -358,6 +360,8 @@ class ResolutionOrchestratorService:
                 )
             except (LlmProviderError, JudgeAgentError) as error:
                 return self._failed(error, started, audit, context)
+            except StageDeferred:
+                raise
             except Exception as error:  # noqa: BLE001 - isolation boundary
                 return self._failed(error, started, audit, context)
 

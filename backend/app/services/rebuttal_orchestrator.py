@@ -28,6 +28,8 @@ Nothing is fabricated to fill the gap.
 
 from __future__ import annotations
 
+from app.cloud_live import StageDeferred
+
 import time
 from dataclasses import dataclass, field
 
@@ -309,6 +311,8 @@ class RebuttalOrchestratorService:
                 ),
                 None,
             )
+        except StageDeferred:
+            raise
         except Exception as error:  # noqa: BLE001 - isolation boundary
             _mark(pipeline, stage, "FAILED")
             if audit is not None:

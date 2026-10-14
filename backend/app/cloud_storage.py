@@ -148,6 +148,7 @@ class SqlState:
             CREATE TABLE IF NOT EXISTS cloud_documents(namespace TEXT NOT NULL, case_id TEXT NOT NULL, slot TEXT NOT NULL, document TEXT NOT NULL, PRIMARY KEY(namespace,case_id,slot));
             CREATE TABLE IF NOT EXISTS cloud_leases(namespace TEXT NOT NULL, case_id TEXT NOT NULL, owner TEXT NOT NULL, expires INTEGER NOT NULL, PRIMARY KEY(namespace,case_id));
             CREATE TABLE IF NOT EXISTS cloud_usage(namespace TEXT NOT NULL, bucket TEXT NOT NULL, count INTEGER NOT NULL, PRIMARY KEY(namespace,bucket));
+            CREATE TABLE IF NOT EXISTS cloud_ai_usage(namespace TEXT NOT NULL, day TEXT NOT NULL, attempts INTEGER NOT NULL, tokens INTEGER NOT NULL, PRIMARY KEY(namespace,day));
             CREATE TABLE IF NOT EXISTS cloud_requests(namespace TEXT NOT NULL, request_id TEXT NOT NULL, fingerprint TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY(namespace,request_id));
             ''')
 
@@ -252,7 +253,11 @@ class CloudCheckpointStore:
             raise CloudStorageError('Checkpoint signing is not configured')
         key = hmac.new(secret.encode(), (self.state.namespace + ':' + case_id).encode(), hashlib.sha256).digest()
         with self.request_lock(case_id) as directory:
-            yield CheckpointSession(directory, key, settings, provider, analysis_hash)
+            session = CheckpointSession(directory, key, settings, provider, analysis_hash)
+            if settings.mode == 'real':
+                from app.cloud_live import StageBudget
+                session.before_invoke = StageBudget(session).before_invoke
+            yield session
 
 
 class CloudReplayStore:

@@ -3,11 +3,11 @@
 This release keeps SQLite as the default. Setting `STORAGE_BACKEND=turso`
 selects the official `libsql==0.1.11` adapter. It does not import local records.
 All policy, claim verification, Judge validation and refund decisions retain
-their existing code authority. Cloud live Gemini is disabled even if a caller
-tries to select a real provider.
+their existing code authority. Cloud live Gemini is disabled by default. An explicitly approved live-preview
+configuration is prepared behind the gates described below.
 The mock release uses its existing 1024-token configuration ceiling. Gemini
 Native retains its approved 4096-token configuration when separately enabled
-and validated outside this preview release.
+and validated in a separately approved preview.
 Intake table and index identifiers are also scoped by `STORAGE_NAMESPACE`, so
 preview and production cannot read each other's intake records. Selecting a new
 namespace creates additive tables; it never imports existing intake data.
@@ -113,3 +113,105 @@ The application does not depend on writable backend runtime files for cloud
 intake, checkpoints, replay artifacts or leases. Prompts and synthetic fixtures
 remain bundled Python/package resources. Actual Vercel preview validation and
 stable private production configuration are mandatory before promotion.
+
+## Live Gemini preview preparation (not enabled by default)
+
+The mock configuration above remains the safe default. Live preparation uses
+the same Native provider, interview service, verification and Judge code.
+Before accessing a new private key, publishing Git changes or making even a
+Gemini model-list request, obtain the corresponding user approval.
+
+For an approved **Preview only** release, use backend-only configuration:
+
+- `CLOUD_LIVE_AI_ENABLED=1`
+- `GEMINI_FREE_TIER_CONFIRMED=1` only after checking the key's project tier,
+  disabled billing and actual model quota in Google AI Studio. This flag records
+  an operator confirmation; the application cannot inspect billing from a key.
+- `AGENT_MODE=real`, `AGENT_PROVIDER=gemini_native`
+- `AGENT_MODEL=gemini-3.8-flash`, `AGENT_MAX_TOKENS=4096`
+- `AGENT_TIMEOUT_SECONDS=30`, `AGENT_MAX_RETRIES=1`
+- `AGENT_RETRY_MAX_BACKOFF_SECONDS=20`
+- `AGENT_API_KEY` from the approved private file; never a Vite variable
+- Explicit `CLOUD_GEMINI_DAILY_ATTEMPTS` and
+  `CLOUD_GEMINI_DAILY_TOKEN_BUDGET`; no unlimited or inferred free quota
+
+Use a new logical validation namespace rather than enabling live calls on the
+working mock preview. Keep its current URL, configuration, data and deployment
+available as the rollback and demo fallback. Bootstrap the new namespace with
+the existing explicit synthetic-only command. `SqlState.initialize()` adds
+`cloud_ai_usage` without changing existing records or smoke tables.
+
+Each live full-resolution request runs at most one new role. Existing compatible
+signed checkpoints are parsed and verified again. Between roles the API returns
+202 with saved role names, and the frontend performs at most five progressively
+advancing requests. Provider failures, invalid output, non-progress, session
+expiry and uncertain deadlines stop continuation; the operator must review
+them before a new action. Leaving a case or signing out stops new role requests;
+the in-flight request retains its existing deadline so it can save its checkpoint. No task runs after the HTTP response.
+
+The 180-second process deadline is retained below the configured 300-second
+function duration. A role has at most one structured-output repair; each
+completion has at most one transport retry. The normal configured worst-case
+transport allowance is 4 x 30 seconds plus 2 x 20 seconds of retry waits.
+Storage or transport stalls can still hit the hard deadline. A killed call or
+write has an unknown outcome: no automatic replay of that action is permitted.
+Abandoned leases expire and signed completed roles remain reusable. A native
+SDK timeout is not a guarantee of exactly-once execution by Google.
+
+Every transport attempt, including retries and repairs, first reserves an
+atomic namespace/day attempt and conservative token allowance in Turso.
+Reservations are never refunded after uncertain calls. Admission storage writes
+are outside the Gemini transport retry handler: an uncertain reservation is
+never automatically repeated and cannot start a provider call. The allowance includes
+UTF-8 prompt/schema bytes, request overhead and the maximum configured output;
+it is an application safety cap, not an assertion about Google's quota or
+billing. Provider-supplied 429 cooldowns are persisted and cannot be shortened
+by a later concurrent failure. Missing retry timing is never guessed. SDK
+automatic retries remain disabled and no paid-provider fallback exists.
+
+Private AI interview prompts retain only the current party's bounded history
+and allegations. Facts remain `ALLEGED`; attribution, contradiction checks and
+the verified-only Judge projection are unchanged. Authentication is still a
+synthetic-demo **reviewer** session, not separate rider/driver user identities.
+This release must not be advertised as a public real-person dispute service.
+
+`FULL_AI` remains an explicit replay action with truthful `MOCK_DEMO` provenance
+for seeded synthetic artifacts. A changed intake/context can make an old replay
+incompatible: refusal is required, never a silent live replacement. Keep at
+least one untouched, validated synthetic case for the fallback demonstration.
+
+### Proposed bounded live validation, requiring separate approval
+
+Confirm free-tier eligibility first. Then publish the reviewed changes to the
+preview branch only and configure a separately isolated live-preview deployment.
+Propose a hard cap of 12 generate attempts and 1,000,000 conservatively reserved
+tokens for the validation namespace/day. Permit one tiny connectivity check,
+at most three synthetic intake turns, and one five-role run across up to five
+requests. Existing repair/retry attempts count toward the same 12-attempt cap.
+Stop on insufficient quota, lifecycle incompletion, rejected output or timeout;
+do not repeatedly retry. This cap may prevent completion when repairs are
+needed, which is preferable to silently exceeding approval.
+
+### Reversible production promotion gate
+
+1. Obtain separate approval after real live-preview and manual Opera validation.
+2. Prepare a production namespace and independent stable server signing/session
+   secrets, authentication hash and Gemini allowance. Never copy local records.
+3. Review a minimal change to the current `VERCEL_ENV=preview` guard; production
+   remains deliberately rejected by the present implementation.
+4. Configure only the backend production environment with exact CORS origin
+   `https://ryderesolve.vercel.app`; verify public health and authenticated APIs
+   against a staged production backend before switching frontend configuration.
+5. After approval, set the frontend production `VITE_API_BASE_URL` to that
+   verified backend. Review branch settings before merging/promoting so Git
+   automation cannot accidentally expose an unconfigured backend.
+6. Check sign-in, case selection, private synthetic intake, evidence, five-role
+   live analysis, fallback provenance, deterministic final outcome and sign-out.
+7. Keep the last working mock deployments and environment fingerprints for
+   rollback. Reverting the frontend URL/deployment and disabling the live gate
+   must not delete or rewrite data or signed checkpoints.
+
+Reference documentation: https://vercel.com/docs/functions/limitations,
+https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash,
+https://ai.google.dev/gemini-api/docs/pricing,
+https://ai.google.dev/gemini-api/docs/rate-limits.

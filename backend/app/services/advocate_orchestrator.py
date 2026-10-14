@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from app.cloud_live import StageDeferred
+
 import time
 from dataclasses import dataclass, field
 
@@ -222,6 +224,8 @@ class AdvocateOrchestratorService:
                 ),
                 None,
             )
+        except StageDeferred:
+            raise
         except Exception as error:  # noqa: BLE001 - isolation boundary
             _mark(pipeline, stage, "FAILED")
             return (

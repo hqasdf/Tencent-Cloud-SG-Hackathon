@@ -81,7 +81,8 @@ def validate_production() -> None:
     settings = AgentSettings.from_environment()
     settings.validate()
     if cloud and settings.mode != 'mock':
-        raise DeploymentConfigurationError('Cloud release requires explicit mock mode; live Gemini is not enabled')
+        from app.cloud_live import validate_live_settings
+        validate_live_settings(settings)
     if settings.mode == "mock" and settings.provider != "mock":
         raise DeploymentConfigurationError("Production mock mode requires the explicit mock provider")
     if settings.mode == "real" and (settings.provider != "gemini_native"

@@ -5,7 +5,7 @@ import type { ResolutionRunResult } from "./services/caseService";
 import type { AdvocateRunResult } from "./types/advocate";
 import type { CaseAnalysis, CaseSummary, DisputeCase } from "./types/dispute";
 
-export default function App({ cloudDemo = false }: { cloudDemo?: boolean } = {}) {
+export default function App({ cloudDemo = false, cloudHosted = false }: { cloudDemo?: boolean; cloudHosted?: boolean } = {}) {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [selectedId, setSelectedId] = useState("DISP-002");
   const [selectedCase, setSelectedCase] = useState<DisputeCase | null>(null);
@@ -21,8 +21,12 @@ export default function App({ cloudDemo = false }: { cloudDemo?: boolean } = {})
   const [resolutionError, setResolutionError] = useState<string | null>(null);
   const selectionEpoch = useRef(0);
   const aiRequestActive = useRef(false);
+  const resolutionContinuation = useRef<AbortController | null>(null);
+
+  useEffect(() => () => resolutionContinuation.current?.abort(), []);
 
   function selectCase(id: string) {
+    resolutionContinuation.current?.abort();
     selectionEpoch.current += 1;
     setSelectedId(id);
   }
@@ -81,10 +85,12 @@ export default function App({ cloudDemo = false }: { cloudDemo?: boolean } = {})
     if (!selectedId || aiRequestActive.current) return;
     aiRequestActive.current = true;
     const epoch = selectionEpoch.current;
+    const continuation = new AbortController();
+    resolutionContinuation.current = continuation;
     setResolutionRunning(true);
     setResolutionError(null);
     try {
-      const result = await caseService.runResolution(selectedId, cloudDemo ? "FULL_AI" : replayMode);
+      const result = await caseService.runResolution(selectedId, cloudDemo ? "FULL_AI" : replayMode, continuation.signal);
       if (epoch !== selectionEpoch.current || result.caseId !== selectedId) return;
       setResolutionRun(result);
       setAdvocateRun({
@@ -104,11 +110,12 @@ export default function App({ cloudDemo = false }: { cloudDemo?: boolean } = {})
       if (epoch === selectionEpoch.current) setResolutionError(requestError instanceof Error ? requestError.message : "Unable to run the resolution pipeline.");
     } finally {
       setResolutionRunning(false);
+      resolutionContinuation.current = null;
       aiRequestActive.current = false;
     }
   }
 
   if (loadingList) return <div className="loading">Loading RydeResolve case workspaceâ€¦</div>;
   if (error && cases.length === 0) return <div className="app-state"><h1>Case API unavailable</h1><p>{error}</p><button onClick={() => window.location.reload()}>Try again</button></div>;
-  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Dispute review</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => selectCase(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} Â· {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence first</b><span>AI claims are checked. Code decides.</span></div></aside>{loadingCase ? <div className="loading">Loading case recordâ€¦</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => selectCase(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail cloudDemo={cloudDemo} key={selectedId} caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} onRunDemo={() => void runResolution("FULL_AI")} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
+  return <div className="app-shell"><aside className="dashboard"><div className="brand"><span className="brand-mark">R</span><div><strong>RydeResolve</strong><small>Dispute review</small></div></div><div className="sidebar-label">Open cases</div><nav>{cases.map((item) => <button key={item.id} className={`case-row ${selectedId === item.id ? "selected" : ""}`} onClick={() => selectCase(item.id)}><div className="case-row-head"><span>{item.id}</span><b className={`status status-${item.status.replaceAll(" ", "-").toLowerCase()}`}>{item.status}</b></div><strong>{item.title}</strong><small>{item.rider.name} Â· {item.driver.name}</small><div className="case-row-foot"><span>{item.disputeType.replaceAll("_", " ")}</span>{item.status !== "Pending" && <span>{item.confidence.overall}% confidence</span>}</div></button>)}</nav><div className="sidebar-note"><b>Evidence first</b><span>AI claims are checked. Code decides.</span></div></aside>{loadingCase ? <div className="loading">Loading case recordâ€¦</div> : error ? <div className="app-state"><h1>Case unavailable</h1><p>{error}</p><button onClick={() => selectCase(cases[0]?.id ?? "")}>Open first available case</button></div> : selectedCase ? <CaseDetail allowStandaloneAdvocates={!cloudHosted} cloudDemo={cloudDemo} key={selectedId} caseData={selectedCase} analysis={analysis} advocateRun={advocateRun} advocateRunning={advocateRunning} advocateError={advocateError} onRunAdvocates={() => void runAdvocates()} resolutionRun={resolutionRun} resolutionRunning={resolutionRunning} resolutionError={resolutionError} onRunResolution={() => void runResolution()} onRunDemo={() => void runResolution("FULL_AI")} /> : <div className="app-state"><h1>No dispute selected</h1><p>Select a case from the dashboard.</p></div>}</div>;
 }

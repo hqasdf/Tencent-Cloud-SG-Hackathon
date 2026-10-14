@@ -23,6 +23,7 @@ import {
 
 export interface CaseDetailProps {
   cloudDemo?: boolean;
+  allowStandaloneAdvocates?: boolean;
   caseData: DisputeCase;
   analysis: CaseAnalysis | null;
   advocateRun: AdvocateRunResult | null;
@@ -150,7 +151,8 @@ export function CaseDetail({
   resolutionError,
   onRunResolution,
   onRunDemo,
-  cloudDemo = false
+  cloudDemo = false,
+  allowStandaloneAdvocates = true
 }: CaseDetailProps) {
   const [openStep, setOpenStep] = useState(1);
   const [intakeCase, setIntakeCase] = useState<IntakeCase | null>(null);
@@ -297,7 +299,7 @@ export function CaseDetail({
           <button type="button" className="wf-run" onClick={aiReviewComplete ? () => setOpenStep(4) : onRunResolution} disabled={busy}>{busy ? "Running analysis…" : aiReviewComplete ? "View decision" : resolutionRun ? "Retry AI review" : "Run analysis"}</button>
           <details className="more-actions"><summary>More options</summary>
             {onRunDemo && <button type="button" className="wf-run-ghost" onClick={onRunDemo} disabled={busy}>View saved demo</button>}
-            {!cloudDemo && !resolutionRun && <button type="button" className="wf-run-ghost" onClick={onRunAdvocates} disabled={busy}>Advocates only</button>}
+            {allowStandaloneAdvocates && !cloudDemo && !resolutionRun && <button type="button" className="wf-run-ghost" onClick={onRunAdvocates} disabled={busy}>Advocates only</button>}
             {aiReviewComplete && <button type="button" className="wf-run-ghost" onClick={onRunResolution} disabled={busy}>Run analysis again</button>}
           </details>
         </div>

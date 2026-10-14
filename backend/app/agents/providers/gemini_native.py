@@ -286,6 +286,15 @@ class GeminiNativeProvider:
         waited = 0.0
         while True:
             attempt += 1
+            from app.cloud_storage import storage_backend
+            if storage_backend() == 'turso':
+                from app.cloud_live import reserve_attempt
+                # An uncertain storage write must never enter transport retries.
+                try:
+                    reserve_attempt(request, self._model)
+                except LlmProviderError as error:
+                    error.attempts = attempt - 1
+                    raise
             try:
                 client = self._client_factory(
                     api_key=self._api_key, timeout_seconds=self._timeout_seconds
@@ -300,6 +309,9 @@ class GeminiNativeProvider:
             except Exception as error:  # noqa: BLE001 - cancellation/stop must propagate
                 failure = _normalise(error, self.name)
                 failure.attempts = attempt
+                if storage_backend() == 'turso':
+                    from app.cloud_live import remember_cooldown
+                    remember_cooldown(failure)
                 failure.quota_details = [item for item in failure.quota_details
                     if not any(self._api_key in value for value in item.values())]
                 if failure.retryable and attempt <= self._max_retries:

@@ -112,10 +112,27 @@ export const caseService = {
    * Kept separate from runAdvocates so the Stage 4 endpoint and its response
    * contract are untouched. A complete live run costs five model calls.
    */
-  runResolution(id: string, replayMode: "NONE" | "FULL_AI" = "NONE"): Promise<ResolutionRunResult> {
-    return request<ResolutionRunResult>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
+  runResolution(id: string, replayMode: "NONE" | "FULL_AI" = "NONE", continuation?: AbortSignal): Promise<ResolutionRunResult> {
+    return runResolutionSteps(id, replayMode, continuation);
+  }
+};
+
+async function runResolutionSteps(id: string, replayMode: "NONE" | "FULL_AI", continuation?: AbortSignal): Promise<ResolutionRunResult> {
+  let previousSaved = 0;
+  const roles = new Set(["RIDER_ADVOCATE", "DRIVER_ADVOCATE", "RIDER_REBUTTAL", "DRIVER_REBUTTAL", "JUDGE"]);
+  for (let step = 0; step < 5; step++) {
+    if (continuation?.aborted) throw new CaseApiError("Analysis continuation stopped. Completed checkpoints remain saved.");
+    const result = await request<ResolutionRunResult | { resumeRequired: true; savedRoles: string[] }>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
       method: "POST",
       ...(replayMode === "FULL_AI" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ replayMode }) } : {})
     });
+    if (!("resumeRequired" in result)) return result;
+    if (result.resumeRequired !== true || replayMode !== "NONE" || !Array.isArray(result.savedRoles)
+        || result.savedRoles.length <= previousSaved || result.savedRoles.some(role => !roles.has(role))
+        || new Set(result.savedRoles).size !== result.savedRoles.length) {
+      throw new CaseApiError("Analysis could not safely continue. Verified checkpoints remain saved; no automatic retry was started.");
+    }
+    previousSaved = result.savedRoles.length;
   }
-};
+  throw new CaseApiError("Analysis reached its continuation limit. Verified checkpoints remain saved. Continue manually later.");
+}
