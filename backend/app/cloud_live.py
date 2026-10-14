@@ -48,7 +48,8 @@ def _limit(name, maximum):
 def validate_live_settings(settings):
     if (not live_enabled() or settings.mode != 'real' or settings.provider != 'gemini_native'
             or settings.model != 'gemini-3.8-flash' or settings.max_tokens != 4096
-            or settings.max_retries > 1 or settings.timeout_seconds > 30
+            or settings.max_retries > 1 or settings.timeout_seconds > 60
+            or (settings.timeout_seconds > 30 and settings.max_retries != 0)
             or settings.retry_max_backoff_seconds > 20):
         raise AgentConfigurationError('Cloud live Gemini is disabled without explicit approval, confirmed free tier and bounded approved configuration')
     return (_limit('CLOUD_GEMINI_DAILY_ATTEMPTS', 100),

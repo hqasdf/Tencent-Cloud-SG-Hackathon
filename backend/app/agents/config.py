@@ -29,7 +29,9 @@ PROMPT_VERSION = "advocate_prompts_v3_atomic_propositions"
 # problem to diagnose, not a number to raise.
 DEFAULT_TIMEOUT_SECONDS = 30.0
 MAX_TIMEOUT_SECONDS = 30.0
-"""Hard ceiling. ``Do not silently extend the timeout`` is enforced, not promised."""
+"""Existing ceiling for non-native transports."""
+GEMINI_MAX_TIMEOUT_SECONDS = 60.0
+"""Explicit native opt-in; cloud execution additionally forbids transport retries."""
 
 DEFAULT_MAX_TOKENS = 1024
 MAX_OUTPUT_TOKENS = 1024
@@ -106,7 +108,8 @@ class AgentSettings:
             base_url=_resolve_base_url(provider),
             api_key=_resolve_api_key(provider),
             timeout_seconds=_bounded_float_env(
-                "AGENT_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS, maximum=MAX_TIMEOUT_SECONDS
+                "AGENT_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS,
+                maximum=(GEMINI_MAX_TIMEOUT_SECONDS if provider == "gemini_native" else MAX_TIMEOUT_SECONDS)
             ),
             temperature=_float_env("AGENT_TEMPERATURE", 0.0),
             max_tokens=_bounded_int_env(

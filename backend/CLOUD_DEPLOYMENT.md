@@ -129,7 +129,7 @@ For an approved **Preview only** release, use backend-only configuration:
   an operator confirmation; the application cannot inspect billing from a key.
 - `AGENT_MODE=real`, `AGENT_PROVIDER=gemini_native`
 - `AGENT_MODEL=gemini-3.8-flash`, `AGENT_MAX_TOKENS=4096`
-- `AGENT_TIMEOUT_SECONDS=30`, `AGENT_MAX_RETRIES=1`
+- `AGENT_TIMEOUT_SECONDS=60`, `AGENT_MAX_RETRIES=0`
 - `AGENT_RETRY_MAX_BACKOFF_SECONDS=20`
 - `AGENT_API_KEY` from the approved private file; never a Vite variable
 - Explicit `CLOUD_GEMINI_DAILY_ATTEMPTS` and
@@ -148,6 +148,15 @@ advancing requests. Provider failures, invalid output, non-progress, session
 expiry and uncertain deadlines stop continuation; the operator must review
 them before a new action. Leaving a case or signing out stops new role requests;
 the in-flight request retains its existing deadline so it can save its checkpoint. No task runs after the HTTP response.
+
+The native SDK translates its millisecond timeout to both HTTPX seconds and
+`X-Server-Timeout`, so the previous 30-second setting also asked Google to stop
+generation at 30 seconds. The approved native opt-in is 60 seconds with zero
+transport retries. One allowed schema repair therefore permits at most two
+60-second calls (120 seconds), leaving 60 seconds of the existing worker envelope
+for startup, storage and checkpoint persistence. Other transports and the default
+remain 30 seconds; native settings above 60 seconds or long native cloud calls
+with transport retries are rejected.
 
 The 180-second process deadline is retained below the configured 300-second
 function duration. A role has at most one structured-output repair; each
