@@ -121,7 +121,7 @@ class BaseAdvocateAgent:
         request = AgentCompletionRequest(
             system_prompt=self._system_prompt(),
             user_prompt=self._user_prompt(context),
-            response_schema=self._output_schema,
+            response_schema=self._request_schema(context),
             temperature=self._settings.temperature,
             max_tokens=self._settings.max_tokens,
             # A gateway-only knob, kept out of the generic provider contract.
@@ -133,6 +133,34 @@ class BaseAdvocateAgent:
         )
         output, completion = complete_typed(self._provider, request, self._parse)
         return AdvocateArgument(output=output, completion=completion)
+
+    def _request_schema(self, context: AgentCaseContext) -> dict:
+        # Narrow generation only. Persisted models, parser, checkpoint identity,
+        # and deterministic semantic verification remain unchanged.
+        if self._provider.name != "gemini_native":
+            return self._output_schema
+        from copy import deepcopy
+        schema = deepcopy(self._output_schema)
+        claims = schema["properties"]["claims"]
+        verified = sorted(item.id for item in context.evidence if item.status == "Verified")
+        if not verified:
+            claims["maxItems"] = 0  # No material claim can pass without verified evidence.
+            return schema
+        claim = claims["items"]
+        citations = claim["properties"]["evidenceIds"]
+        citations["minItems"] = 1
+        citations["items"] = {"type": "string", "enum": verified}
+        if "evidenceIds" not in claim["required"]:
+            claim["required"].append("evidenceIds")
+        proposition = claim["properties"]["propositions"]["items"]
+        proposition["properties"]["evidenceIds"]["items"] = {"type": "string", "enum": verified}
+        for branch in proposition["anyOf"]:
+            if branch["properties"]["kind"].get("const") in {"FACT", "CAUSAL", "POLICY_APPLICATION"}:
+                branch["properties"]["evidenceIds"]["minItems"] = 1
+                branch["properties"]["evidenceIds"]["items"] = {"type": "string", "enum": verified}
+                if "evidenceIds" not in branch["required"]:
+                    branch["required"].append("evidenceIds")
+        return schema
 
     def _extra_body(self) -> dict[str, object]:
         """Provider-specific optional request fields for this call.

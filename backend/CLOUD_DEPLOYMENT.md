@@ -134,7 +134,7 @@ For an approved **Preview only** release, use backend-only configuration:
 - `AGENT_API_KEY` from the approved private file; never a Vite variable
 - Explicit `CLOUD_GEMINI_DAILY_ATTEMPTS` and
   `CLOUD_GEMINI_DAILY_TOKEN_BUDGET`; no unlimited or inferred free quota
-- `CLOUD_GEMINI_CUMULATIVE_ATTEMPTS=16` for the approved validation; the
+- `CLOUD_GEMINI_CUMULATIVE_ATTEMPTS=20` for the approved validation; the
   existing namespace ledger is retained and counted across UTC day boundaries
 
 Use a new logical validation namespace rather than enabling live calls on the
