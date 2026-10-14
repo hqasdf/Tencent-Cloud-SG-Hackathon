@@ -43,6 +43,12 @@ def allowed_origins() -> list[str]:
 
 
 def validate_production() -> None:
+    # A new Vercel project's first deployment may be classified as production.
+    # Never fall back to unauthenticated SQLite/local defaults on that platform.
+    if os.getenv('VERCEL') == '1' or os.getenv('VERCEL_ENV') is not None:
+        if (os.getenv('VERCEL_ENV') != 'preview' or not production_mode()
+                or os.getenv('STORAGE_BACKEND') != 'turso'):
+            raise DeploymentConfigurationError('Vercel requires authenticated Turso preview configuration; production is not approved')
     if not production_mode():
         return
     # New SQLite/replay/lock files are private to the container service owner.

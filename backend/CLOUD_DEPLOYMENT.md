@@ -77,6 +77,10 @@ After approval to publish a preview:
 
 No public deployment or current frontend production configuration has been
 changed by this implementation.
+Vercel application startup fails closed unless the platform target is `preview`
+and authenticated production-mode Turso configuration is present. The backend
+cannot fall back to local SQLite defaults on Vercel. This release intentionally
+rejects a production target until a separate production approval and release.
 
 ## Bounds and remaining risks
 

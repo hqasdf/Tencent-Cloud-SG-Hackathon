@@ -162,6 +162,31 @@ def test_cloud_production_requires_explicit_cors(remote, monkeypatch):
         validate_production()
 
 
+def test_vercel_production_target_fails_closed_before_local_fallback(remote, monkeypatch):
+    from app.deployment import validate_production, DeploymentConfigurationError
+    monkeypatch.setenv('VERCEL_ENV', 'production')
+    monkeypatch.setenv('APP_ENV', 'development')
+    monkeypatch.setenv('STORAGE_BACKEND', 'sqlite')
+    with pytest.raises(DeploymentConfigurationError, match='production is not approved'):
+        validate_production()
+
+
+def test_vercel_preview_requires_explicit_cloud_configuration(remote, monkeypatch):
+    from app.deployment import validate_production, DeploymentConfigurationError
+    monkeypatch.setenv('VERCEL_ENV', 'preview')
+    monkeypatch.setenv('APP_ENV', 'development')
+    with pytest.raises(DeploymentConfigurationError, match='authenticated Turso'):
+        validate_production()
+
+
+def test_vercel_preview_accepts_valid_authenticated_configuration(remote, monkeypatch):
+    from app.deployment import validate_production
+    monkeypatch.setenv('VERCEL_ENV', 'preview')
+    monkeypatch.setenv('APP_ENV', 'production')
+    monkeypatch.setenv('CORS_ALLOWED_ORIGINS', 'https://synthetic-demo.vercel.app')
+    validate_production()
+
+
 def test_unsafe_documents_and_namespace_isolation(remote, monkeypatch):
     state = cloud.SqlState()
     with pytest.raises(cloud.CloudStorageError):
