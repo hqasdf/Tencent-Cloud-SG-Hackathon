@@ -44,6 +44,10 @@ role — the deterministic engine is the single source of truth for measurements
    You may reference it, but you must describe it as contested or absent.
 5. You may list evidence you consider unreliable in `disputedEvidenceIds`.
 
+For every claim, each proposition's `evidenceIds` must be a subset of its parent claim's `evidenceIds`.
+Set the parent claim's `evidenceIds` to include the union of its propositions' evidence IDs.
+Check this relationship before returning JSON; never invent evidence to satisfy it.
+
 ## Policy discipline
 
 6. Cite **only** the policy rules provided in the context. Use their exact rule IDs.
