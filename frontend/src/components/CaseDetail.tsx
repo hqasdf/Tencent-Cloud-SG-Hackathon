@@ -409,12 +409,14 @@ export function CaseDetail({
 
       {/* ── Workflow Steps (expandable detail cards) ── */}
       {/* Step 1: Hear Both Sides — styled as a large white card */}
-      <div className="mx-8 mb-6">
+      <div className="mx-8 mb-6" id="workflow-step-1">
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           {/* Card header with toggle */}
           <button
             type="button"
             onClick={() => toggle(1)}
+            aria-expanded={openStep === 1}
+            aria-controls="workflow-step-body-1"
             className="w-full flex items-center justify-between px-6 py-4 hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -441,7 +443,7 @@ export function CaseDetail({
           </button>
 
           {openStep === 1 && (
-            <div className="px-6 pb-6 border-t border-gray-50">
+            <div className="px-6 pb-6 border-t border-gray-50" id="workflow-step-body-1">
               {/* Yellow warning banner */}
               <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50/50 border border-amber-200 px-4 py-3">
                 <span className="text-amber-600 text-sm flex-shrink-0">⚠</span>

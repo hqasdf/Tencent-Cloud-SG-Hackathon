@@ -36,8 +36,9 @@ test('workspace has exactly four accessible sections and one primary analysis ac
   const html = render(CaseDetail, props);
   for (const title of ['Hear Both Sides', 'Check the Evidence', 'AI Review', 'Final Decision']) assert.ok(html.includes(title));
   assert.equal((html.match(/id="workflow-step-\d"/g) ?? []).length, 4);
-  assert.equal((html.match(/class="wf-run"/g) ?? []).length, 1);
-  assert.ok(html.includes('More options'));
+  const buttons = [...html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/g)].map(match => match[1].replace(/<[^>]*>/g, "").trim());
+  assert.equal(buttons.filter(text => text.startsWith("Run analysis")).length, 1);
+  assert.match(html, /<summary[^>]*>\s*More\s*<\/summary>/);
   assert.ok(html.includes('aria-expanded="true"'));
   assert.ok(!html.includes('Resolution pipeline'));
 });

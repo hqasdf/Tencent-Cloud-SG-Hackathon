@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import App from "./AuthenticatedApp";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./styles.css";
 

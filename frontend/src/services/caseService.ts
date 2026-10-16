@@ -9,6 +9,7 @@ import type {
 } from "../types/rebuttal";
 import type { WorkflowState } from "../types/workflow";
 import { resolveApiBaseUrl } from "../utils/apiConfig";
+import { authenticatedHeaders, clearApiSession } from "./apiSession";
 
 const apiBaseUrl = resolveApiBaseUrl(import.meta.env.VITE_API_BASE_URL, import.meta.env.PROD,
   import.meta.env.PROD ? "" : "http://localhost:8000");
@@ -69,12 +70,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...init,
-      headers: { Accept: "application/json", ...(init?.headers ?? {}) }
+      signal: init?.signal ?? AbortSignal.timeout(190000),
+      headers: { Accept: "application/json", ...authenticatedHeaders(init?.method), ...(init?.headers ?? {}) }
     });
   } catch {
-    throw new CaseApiError("RydeResolve could not reach the local case API.");
+    throw new CaseApiError("RydeResolve could not complete the API request. Saved analysis remains on the backend; requests are not automatically retried.");
   }
   if (!response.ok) {
+    if (response.status === 401) clearApiSession();
     const body = await response.json().catch(() => null) as { detail?: unknown } | null;
     const structured = body?.detail as { message?: unknown } | null;
     const detail = typeof body?.detail === "string" ? body.detail
@@ -109,10 +112,27 @@ export const caseService = {
    * Kept separate from runAdvocates so the Stage 4 endpoint and its response
    * contract are untouched. A complete live run costs five model calls.
    */
-  runResolution(id: string, replayMode: "NONE" | "FULL_AI" = "NONE"): Promise<ResolutionRunResult> {
-    return request<ResolutionRunResult>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
+  runResolution(id: string, replayMode: "NONE" | "FULL_AI" = "NONE", continuation?: AbortSignal): Promise<ResolutionRunResult> {
+    return runResolutionSteps(id, replayMode, continuation);
+  }
+};
+
+async function runResolutionSteps(id: string, replayMode: "NONE" | "FULL_AI", continuation?: AbortSignal): Promise<ResolutionRunResult> {
+  let previousSaved = 0;
+  const roles = new Set(["RIDER_ADVOCATE", "DRIVER_ADVOCATE", "RIDER_REBUTTAL", "DRIVER_REBUTTAL", "JUDGE"]);
+  for (let step = 0; step < 5; step++) {
+    if (continuation?.aborted) throw new CaseApiError("Analysis continuation stopped. Completed checkpoints remain saved.");
+    const result = await request<ResolutionRunResult | { resumeRequired: true; savedRoles: string[] }>(`/api/cases/${encodeURIComponent(id)}/resolution/run`, {
       method: "POST",
       ...(replayMode === "FULL_AI" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ replayMode }) } : {})
     });
+    if (!("resumeRequired" in result)) return result;
+    if (result.resumeRequired !== true || replayMode !== "NONE" || !Array.isArray(result.savedRoles)
+        || result.savedRoles.length <= previousSaved || result.savedRoles.some(role => !roles.has(role))
+        || new Set(result.savedRoles).size !== result.savedRoles.length) {
+      throw new CaseApiError("Analysis could not safely continue. Verified checkpoints remain saved; no automatic retry was started.");
+    }
+    previousSaved = result.savedRoles.length;
   }
-};
+  throw new CaseApiError("Analysis reached its continuation limit. Verified checkpoints remain saved. Continue manually later.");
+}

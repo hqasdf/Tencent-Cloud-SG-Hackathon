@@ -63,9 +63,9 @@ function harness(service) {
   return {
     flush,
     panel: () => nodes(tree).find(node => node.type === CaseDetail)?.props,
+    nodes: () => nodes(tree),
     select(id) {
-      nodes(tree).find(node => node.type === "button" && node.props.className?.includes("case-row")
-        && node.props.children[0].props.children[0].props.children === id).props.onClick();
+      nodes(tree).find(node => node.type === "button" && node.key === id).props.onClick();
       render();
     }
   };
@@ -114,4 +114,29 @@ test("duplicate or overlapping AI actions make one request and explicit replay k
   assert.deepEqual(calls, [["DISP-002", "FULL_AI"]]);
   pending.resolve(result("DISP-002")); await app.flush();
   assert.equal(app.panel().resolutionRun.caseId, "DISP-002");
+});
+
+
+test("all eight returned cases are selectable and finish loading their detail and analysis", async () => {
+  const eight = Array.from({ length: 8 }, (_, n) => ({ ...cases[0], id: `DISP-${String(n + 2).padStart(3, "0")}` }));
+  const h = harness({ ...baseService(), list: async () => eight, getById: async id => eight.find(c => c.id === id) });
+  await h.flush();
+  assert.equal(h.nodes().filter(node => node.type === "button" && eight.some(c => c.id === node.key)).length, 8);
+  for (const item of eight) { h.select(item.id); await h.flush(); assert.equal(h.panel().caseData.id, item.id); assert.equal(h.panel().analysis.caseId, item.id); }
+});
+
+test("a failed case list ends loading and retains the actual error without starting detail requests", async () => {
+  const pending = deferred(); let details = 0;
+  const h = harness({ ...baseService(), list: () => pending.promise, getById: async () => { details++; throw new Error("Unexpected detail request"); } });
+  assert.ok(h.nodes().some(node => typeof node.props?.children === "string" && node.props.children.includes("Loading RydeResolve")));
+  pending.reject(new Error("Demo authentication required")); await h.flush();
+  assert.ok(h.nodes().some(node => node.type === "h1" && node.props.children === "Case API unavailable"));
+  assert.ok(h.nodes().some(node => node.type === "p" && node.props.children === "Demo authentication required"));
+  assert.equal(details, 0); assert.equal(h.panel(), undefined);
+});
+
+test("failed case details finish loading and display the error instead of an empty case", async () => {
+  const h = harness({ ...baseService(), getById: async () => { throw new Error("Case detail unavailable"); } });
+  await h.flush(); assert.equal(h.panel(), undefined);
+  assert.ok(h.nodes().some(node => node.type === "p" && node.props.children === "Case detail unavailable"));
 });

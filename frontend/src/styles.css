@@ -2362,3 +2362,28 @@ summary:focus-visible, button:focus-visible, input:focus-visible { outline: 3px 
 .sidebar-case-list > button:not(:last-child) {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+/* Authenticated cloud session controls, preserving the current workspace design. */
+.demo-session-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--rvde-navy);
+  color: #F7F9FF;
+  font-weight: 700;
+}
+.demo-signout {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--rvde-pink);
+  border-radius: 10px;
+  background: var(--rvde-pink);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+.demo-signout:hover { background: var(--rvde-pink-deep); }
+.demo-signout:focus-visible { outline: 3px solid white; outline-offset: 3px; }

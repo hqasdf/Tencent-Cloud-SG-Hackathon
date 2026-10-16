@@ -68,21 +68,30 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const selectionEpoch = useRef(0);
   const aiRequestActive = useRef(false);
+  const resolutionContinuation = useRef<AbortController | null>(null);
+
+  useEffect(() => () => resolutionContinuation.current?.abort(), []);
 
   function selectCase(id: string) {
+    resolutionContinuation.current?.abort();
     selectionEpoch.current += 1;
     setSelectedId(id);
   }
 
   useEffect(() => {
+    let cancelled = false;
     void caseService.list().then((items) => {
+      if (cancelled) return;
       setCases(items);
       if (items.length && !items.some((item) => item.id === selectedId)) selectCase(items[0].id);
-    }).catch((requestError: unknown) => setError(requestError instanceof Error ? requestError.message : "Unable to load disputes.")).finally(() => setLoadingList(false));
+    }).catch((requestError: unknown) => {
+      if (!cancelled) setError(requestError instanceof Error ? requestError.message : "Unable to load disputes.");
+    }).finally(() => { if (!cancelled) setLoadingList(false); });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (!selectedId || loadingList) return;
+    if (!selectedId || loadingList || !cases.some(item => item.id === selectedId)) return;
     let cancelled = false;
     setLoadingCase(true);
     setError(null);
@@ -102,7 +111,7 @@ export default function App() {
       else setError(requestError instanceof Error ? requestError.message : "Unable to load the selected case.");
     }).finally(() => { if (!cancelled) setLoadingCase(false); });
     return () => { cancelled = true; };
-  }, [selectedId, loadingList]);
+  }, [selectedId, loadingList, cases]);
 
   async function runAdvocates() {
     if (!selectedId || aiRequestActive.current) return;
@@ -126,10 +135,12 @@ export default function App() {
     if (!selectedId || aiRequestActive.current) return;
     aiRequestActive.current = true;
     const epoch = selectionEpoch.current;
+    const continuation = new AbortController();
+    resolutionContinuation.current = continuation;
     setResolutionRunning(true);
     setResolutionError(null);
     try {
-      const result = await caseService.runResolution(selectedId, replayMode);
+      const result = await caseService.runResolution(selectedId, replayMode, continuation.signal);
       if (epoch !== selectionEpoch.current || result.caseId !== selectedId) return;
       setResolutionRun(result);
       setAdvocateRun({
@@ -145,6 +156,7 @@ export default function App() {
       if (epoch === selectionEpoch.current) setResolutionError(requestError instanceof Error ? requestError.message : "Unable to run the resolution pipeline.");
     } finally {
       setResolutionRunning(false);
+      resolutionContinuation.current = null;
       aiRequestActive.current = false;
     }
   }
