@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ryderesolve-api
+    runtime: docker
+    repo: https://github.com/hqasdf/Tencent-Cloud-SG-Hackathon
+    branch: main
+    rootDir: .
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
