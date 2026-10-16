@@ -68,7 +68,5 @@ def validate_production() -> None:
     settings.validate()
     if settings.mode == "mock" and settings.provider != "mock":
         raise DeploymentConfigurationError("Production mock mode requires the explicit mock provider")
-    if settings.mode == "real" and (settings.provider != "gemini_native"
-            or settings.model != "gemini-3.8-flash" or settings.max_tokens != 4096
-            or settings.max_retries > 1):
-        raise DeploymentConfigurationError("Production live mode requires the approved Gemini Native model, 4096 tokens and at most one retry")
+    if settings.mode == "real" and settings.provider not in ("gemini_native", "tencent_tokenhub", "openai_compatible"):
+        raise DeploymentConfigurationError("Production live mode requires a supported provider")
