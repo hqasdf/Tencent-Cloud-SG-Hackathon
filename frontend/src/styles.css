@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 /* ──────────────────────────────────────────────────────────────────
@@ -1020,13 +1021,20 @@ code {
   gap: 12px;
 }
 
+/*
+ * Phone bezel: navy, thick, rounded.
+ * Uses border (not padding) so the navy ring visually reads as a real device frame
+ * rather than a shadow. overflow-hidden keeps the screen edges clipped to the inner
+ * radius so the bezel never overlaps the chat area.
+ */
 .phone-frame {
   width: 100%;
   max-width: 380px;
   margin: 0 auto;
   background: var(--rvde-navy);
-  border-radius: 32px;
-  padding: 10px;
+  border: 8px solid #131b2b;
+  border-radius: 2rem;
+  overflow: hidden;
   box-shadow: 0 10px 32px rgba(26, 43, 74, 0.15);
 }
 .phone-notch {
@@ -1038,7 +1046,7 @@ code {
 }
 .phone-screen {
   background: var(--rvde-cream);
-  border-radius: 22px;
+  border-radius: calc(2rem - 8px);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -1071,7 +1079,9 @@ code {
 
 .phone-chat {
   flex: 1;
+  /* Always allow scrolling — long interviews should not break the phone frame. */
   overflow-y: auto;
+  min-height: 0;
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -1151,8 +1161,8 @@ code {
 }
 .phone-input-bar button {
   border: 0;
-  border-radius: 18px;
-  background: var(--rvde-pink);
+  border-radius: 9999px;
+  background: #f03b65;
   color: #fff;
   font: inherit;
   font-weight: 700;
@@ -1160,10 +1170,11 @@ code {
   padding: 8px 16px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 .phone-input-bar button:hover:not(:disabled) {
-  background: var(--rvde-pink-deep);
+  background: #e02a55;
+  box-shadow: 0 0 12px rgba(240, 59, 101, 0.35);
 }
 .phone-input-bar button:disabled {
   opacity: 0.4;
@@ -1472,6 +1483,33 @@ code {
   border-radius: 6px;
   padding: 8px 10px;
   margin: 0 0 10px;
+}
+
+/*
+ * Soft amber warning banner shown above the phone mockups.
+ * Translucent amber-50 over a white card so the warm off-white of the page
+ * still shows through, with a thin amber-200 border to keep it visually
+ * distinct from neutral notes.
+ */
+.amber-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(254, 243, 199, 0.5);
+  border: 1px solid #fde68a;
+  color: #92400e;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 0 0 14px;
+}
+.amber-alert::before {
+  content: "⚠";
+  font-size: 14px;
+  line-height: 1;
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .judge-status {
@@ -2311,3 +2349,16 @@ summary:focus-visible, button:focus-visible, input:focus-visible { outline: 3px 
 .workflow-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 700px) { .workflow-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ai-review-timeline .panel-heading { flex-wrap: wrap; gap: 8px; } .compact-evidence li { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* ─── Sidebar case list: hide scrollbar but keep scroll ─── */
+.sidebar-case-list {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+.sidebar-case-list::-webkit-scrollbar {
+  display: none;                   /* Chrome/Safari */
+}
+/* Thin divider between case cards in the sidebar (not on the last one) */
+.sidebar-case-list > button:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}

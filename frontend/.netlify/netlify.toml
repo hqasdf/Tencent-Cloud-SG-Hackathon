@@ -1,0 +1,28 @@
+plugins = []
+headers = []
+redirects = []
+
+[functions]
+
+[functions."*"]
+
+[build]
+publish = "c:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\frontend\\dist"
+publishOrigin = "ui"
+commandOrigin = "ui"
+base = "c:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\frontend"
+command = "npm run build"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]

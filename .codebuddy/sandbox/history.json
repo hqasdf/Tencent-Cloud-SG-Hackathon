@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "spaceKey": "e04c1caf673249d7bfbe1ec8ad79a759",
+      "projectPath": "c:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\backend",
+      "desc": "RydeResolve FastAPI backend - dispute resolution API with mock mode for demo",
+      "createdAt": 1792143617047
+    },
+    {
+      "spaceKey": "570d3554e2b6453ebf1aec57323f1027",
+      "projectPath": "c:\\Users\\ephra\\OneDrive\\SP\\TENCENT Hackathon\\Tencent-Cloud-SG-Hackathon\\frontend\\dist",
+      "desc": "ryderesolve — AI dispute resolution dashboard with phone mockup intake interviews",
+      "createdAt": 1792146755013
+    }
+  ]
+}
